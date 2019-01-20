@@ -1,0 +1,322 @@
+<html>
+
+<head>
+    <script src="js/jquery-3.2.1.js"></script>
+    <title>WorkLog Ajax测试</title>
+</head>
+
+<body>
+    <div id='main'></div>
+    <script>
+        //var u = "http://111.53.74.132:8091/default.ashx/"
+		var u = "http://localhost:26849/default.ashx/"
+        window.onload = init;
+        function init() {
+        
+      //AccountAdd();
+	  //GetAccount();
+      //test8091();
+      // AccountModify();
+		 // GetWorker();
+		 //UpdateWorkLog();
+		 //GetWorkLog();
+	 	//UploadWorkLog();
+			//
+			//GetProject();
+	 		//CloseProject();
+			//ProjectAdd();
+			
+			//UploadWeekLog();
+			//UpdateWeekLog();
+			GetWeekLog();
+        }  
+		
+	function GetWeekLog(){  //获取日志
+		log("获取 GetWeekLog...");			   
+            var d={
+                func:"GetWeekLog",
+				
+                name:"test", 				
+                day:"2019-01-01",
+                corp:"123"                                        
+            }
+            $.get(u,d,function(data){
+                log(data);
+            },"text");
+        }
+         
+		 function UpdateWeekLog(){  //更新工作日志
+				 log("update UpdateWeekLog...");			  
+            var d={
+                func:"UpdateWeekLog",
+				
+                day:"2019-01-01",
+                account:"test",
+                name:"test",
+                project:"uplan1",
+				worksum:"sum",
+				problem:"su",
+				plan:"plan",
+				advise:"advise:",
+				city:"茂名市2",								 							 														
+				issue:"--",
+				modifiedBy:"PPPP",
+				modifiedDate:"0001111",
+				corp:"2200"                                        
+            }
+            $.get(u,d,function(data){
+                log(data);
+            },"text");
+        }
+		function UploadWeekLog(){		//添加周报
+        		log("UploadWeekLog...");
+         
+           var weekLog={           	    
+				day:"2019-01-01",
+				name:"testaa",
+				account:"test1",
+           		project:"test",  
+				worksum:"sum",
+				problem:"su",
+				plan:"plan",
+				advise:"advise:",
+				city:"cite",
+				issue:"is",				
+				modifiedBy:"1"							
+           };
+                 var weekLogList=new Array();
+           weekLogList.push(weekLog);
+		   
+           var dataStr=JSON.stringify(weekLogList);
+           var d={
+           			func:"UploadWeekLog",
+           			data:weekLogList
+           		};
+           		
+		   	log("------>UploadWeekLog post..."& u);
+           $.post(u,JSON.stringify(d),function(data){
+           	console.log(data);
+               log(data);
+           },"text");
+           	log("---->UploadWeekLog End...");
+        }
+        
+		
+		function ProjectAdd(){		//添加工程
+        		log("ProjectAdd...");         
+           var workProject={           	
+           		project:"test",           									 							 
+				corp:"zx",
+				state:"1"							
+           };
+                       
+           var dataStr=JSON.stringify(workProject);
+           var d={
+           			func:"ProjectAdd",
+           			data:workProject
+           		};
+           		
+		   	log("------>ProjectAdd post..."& u);
+           $.post(u,JSON.stringify(d),function(data){
+           	console.log(data);
+               log(data);
+           },"text");
+           	log("---->ProjectAdd End...");
+        }
+        
+	function CloseProject(){  //关闭工程
+			log("close CloseProject...");			 
+            var d={
+                func:"CloseProject",
+				
+                project:"test", 				               
+                corp:"123"                                        
+            }
+            $.get(u,d,function(data){
+                log(data);
+            },"text");
+        }
+		
+		function GetProject(){  //获取日志
+				 log("获取 GetProject...");			 
+            var d={
+                func:"GetProject"                                                   
+            }
+            $.get(u,d,function(data){
+                log(data);
+            },"text");
+        }
+        function GetWorker(){  //获取人员
+				 log("获取 GetWorker...");			  
+            var d={
+                func:"GetWorker"                                             
+            }
+            $.get(u,d,function(data){
+                log(data);
+            },"text");
+        }
+		
+        function AccountModify(){  //修改账号
+				 log("获取 AccountModify...");			 
+            var d={
+                func:"AccountModify",
+                account:"test", 				
+                password:"20190116",
+				newPassword:"a",
+                corp:"123"                                        
+            }
+            $.get(u,d,function(data){
+                log(data);
+            },"text");
+        }
+		
+        function AccountAdd(){		//添加账号
+        		log("AccountAdd...");       
+           var workAccount={
+           	
+           		workID:"201",
+           		account:"test1",                
+                password:"uu",
+				name:"茂名test1",								 							 
+				corp:"hh",
+				state:"1"							
+           };
+                       
+           var dataStr=JSON.stringify(workAccount);
+           var d={
+           			func:"AccountAdd",
+           			data:workAccount
+           		};
+           		
+		   	log("------>AccountAdd post..."& u);
+           $.post(u,JSON.stringify(d),function(data){
+           	console.log(data);
+               log(data);
+           },"text");
+           	log("---->AccountAdd End...");
+        }
+        
+        
+        function GetWorkLog(){  //获取日志
+				 log("获取 GetWorkLog...");			 
+            var d={
+                func:"GetWorkLog",
+				
+                name:"test", 				
+                day:"2019-01-16",
+                corp:"123"                                        
+            }
+            $.get(u,d,function(data){
+                log(data);
+            },"text");
+        }
+         
+        
+        function UpdateWorkLog(){  //更新工作日志
+				 log("update GetUpdateWorkLog...");			  
+            var d={
+                func:"UpdateWorkLog",
+				
+                day:"2019-01-12",
+                account:"test",
+                name:"test",
+                project:"uplan1",
+				city:"茂名市2",								 							 							
+				workContent:"@@@@@@@",
+				issue:"--",
+				modifiedBy:"PPPP",
+				modifiedDate:"0001111",
+				corp:"2200"                                        
+            }
+            $.get(u,d,function(data){
+                log(data);
+            },"text");
+        }
+        
+        
+         function UploadWorkLog(){		//上传工作日志
+        		log("UploadWorkLog...");
+         
+           var workLog={           	
+           		day:"2019-01-13",
+           		account:"test3",                
+                project:"uu",
+				name:"测试testtest2",
+				city:"茂名市",								 							 				
+				account:"test",
+				workContent:"2wwwdddwww",
+				issue:"21111112",
+				modifiedBy:"22243443",
+				modifiedDate:"1111",
+				corp:"22"							
+           };
+           var workLogList=new Array();
+           workLogList.push(workLog);
+           
+           var dataStr=JSON.stringify(workLogList);
+           var d={
+           			func:"UploadWorkLog",
+           			data:workLogList
+           		};
+           		
+		   	log("------>UploadWorkLog post..."& u);
+           $.post(u,JSON.stringify(d),function(data){
+           	console.log(data);
+               log(data);
+           },"text");
+           	log("---->UploadWorkLog End...");
+        }
+        
+    function test8091(){  //GetSmartPlanRSRPPoint获取某片区RSRP数据点
+		 log("test.21..");
+		
+            var d={
+                func:"Test",
+                name:"test", 				
+                day:"2019-01-12",
+                corp:"123"
+								
+
+            }
+            $.get(u,d,function(data){
+                log("test:"+ data);
+            },"text");
+        }
+         
+         
+    function GetAccount(){  //获取账号
+				 log("获取 GetAccount...");            
+		var d={
+                func:"GetAccount",  
+				account:"test",
+				password:"uu"
+				
+            }
+            $.get(u,d,function(data){
+                log(data);
+            },"text");
+        }
+                       
+         function test(){  //GetSmartPlanRSRPPoint获取某片区RSRP数据点
+		 log("test.21..");
+            var d={
+                func:"test21",
+                carrier:"移动",
+								
+
+            }
+            $.get(u,d,function(data){
+                log("test:"+ data);
+            },"text");
+        }
+     
+      
+        function log(html) {
+            console.log(html);
+            $("#main").html(html);
+        }  
+                         
+    </script>
+</body>
+
+</html>
