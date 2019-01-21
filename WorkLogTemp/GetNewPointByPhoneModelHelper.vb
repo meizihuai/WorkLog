@@ -17,7 +17,6 @@ Imports Newtonsoft.Json
 Imports Newtonsoft.Json.Linq
 Imports System.Xml
 Imports System.Web
-Imports MySql.Data.MySqlClient
 Imports System.Reflection
 Imports System.IO.Compression
 

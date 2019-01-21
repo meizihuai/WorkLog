@@ -17,11 +17,20 @@ Imports Newtonsoft.Json
 Imports Newtonsoft.Json.Linq
 Imports System.Xml
 Imports System.Web
-Imports MySql.Data.MySqlClient
 Imports System.Reflection
 Imports System.IO.Compression
 
 Public Class HTTPHandle
+    Structure loginInfo
+        Dim usr As String
+        Dim name As String
+        Dim token As String
+        Sub New(usr As String, name As String, token As String)
+            Me.usr = usr
+            Me.name = name
+            Me.token = token
+        End Sub
+    End Structure
     Structure workLogInfo
 
         Dim day As String
@@ -34,6 +43,19 @@ Public Class HTTPHandle
         Dim modifiedDate As String
         Dim corp As String
         Dim account As String
+        Dim files As List(Of workFileInfo)
+    End Structure
+    Structure workFileInfo
+        Dim fileName As String
+        Dim base64 As String
+    End Structure
+    Structure workFileInfo2
+        Dim fileName As String
+        Dim url As String
+        Sub New(fileName As String, url As String)
+            Me.fileName = fileName
+            Me.url = url
+        End Sub
     End Structure
 
     Structure accountInfo
@@ -74,24 +96,38 @@ Public Class HTTPHandle
         Dim modifiedDate As String
 
     End Structure
-
-    ''设置web.config  System.Web.Configuration.WebConfigurationManager.AppSettings.Set("name", "name2");
-
+    '用户登陆
+    Public Function Handle_login(ByVal context As HttpContext) As NormalResponse '用户登陆
+        Try
+            Dim account As String = context.Request.QueryString("usr")
+            Dim passWord As String = context.Request.QueryString("pwd")
+            If account = "" Then Return New NormalResponse(False, "用户名为空")
+            If passWord = "" Then Return New NormalResponse(False, "密码为空")
+            Dim sql As String = "select password,token,name from LogAccount where account='" & account & "' and state<>0" ' And " passWord ='" & passWord & "'"
+            Dim dt As DataTable = ORALocalhost.SqlGetDT(sql)
+            If IsNothing(dt) Then Return New NormalResponse(False, "用户名或密码错误")
+            If dt.Rows.Count = 0 Then Return New NormalResponse(False, "用户名或密码错误")
+            Dim row As DataRow = dt.Rows(0)
+            Dim OraPwd As String = row("password".ToUpper).ToString
+            Dim OraToken As String = row("token".ToUpper).ToString
+            Dim oraName As String = row("name".ToUpper).ToString
+            If IsDBNull(OraToken) Then OraToken = ""
+            If OraPwd = passWord Then
+                If OraToken = "" Then
+                    OraToken = GetNewToken(account, True)
+                End If
+                Dim linfo As New loginInfo(account, oraName, OraToken)
+                Return New NormalResponse(True, "success", "", linfo)
+            Else
+                Return New NormalResponse(False, "用户名或密码错误", "", "")
+            End If
+        Catch ex As Exception
+            Return New NormalResponse(False, ex.ToString)
+        End Try
+    End Function
     Public Function Handle_Test(ByVal context As HttpContext) As NormalResponse '测试
         Return New NormalResponse(True, "WorkLogTemp网络测试成功！这是返回处理信息", "这里返回错误信息", "这里返回数据")
     End Function
-    Public Function Handle_SetConfig(ByVal context As HttpContext) As NormalResponse '设置配置信息
-        Dim configName As String = context.Request.QueryString("configName")
-        Dim value As String = context.Request.QueryString("value")
-        System.Web.Configuration.WebConfigurationManager.AppSettings.Set(configName, value)
-        Return New NormalResponse(True, "设置成功")
-    End Function
-    Public Function Handle_GetConfig(ByVal context As HttpContext) As NormalResponse '获取配置信息
-        Dim configName As String = context.Request.QueryString("configName")
-        Dim sql As String = System.Web.Configuration.WebConfigurationManager.AppSettings(configName)
-        Return New NormalResponse(True, "", "", sql)
-    End Function
-
 
     Public Function Handle_UpdateWeekLog(ByVal context As HttpContext) As NormalResponse '更新工作周报
         Dim Stepp As Single = 0
@@ -146,7 +182,7 @@ Public Class HTTPHandle
             Return New NormalResponse(False, "UpdateWeekLog Err:" & ex.Message & ",Step=" & Stepp)
         End Try
     End Function
-
+    '获取周报
     Public Function Handle_GetWeekLog(ByVal context As HttpContext) As NormalResponse '获取工作周报
         Dim Stepp As Single = 0
         Try
@@ -190,8 +226,8 @@ Public Class HTTPHandle
             Return New NormalResponse(False, "GetWeekLog Err:" & ex.Message & ",Step=" & Stepp)
         End Try
     End Function
-
-    Public Function Handle_UploadWeekLog(context As HttpContext, data As Object) As NormalResponse '保存WeekLog
+    '上传周报
+    Public Function Handle_UploadWeekLog(context As HttpContext, data As Object, token As String) As NormalResponse '保存WeekLog
         Dim Stepp As Integer = -1
         Try
             Dim str As String = JsonConvert.SerializeObject(data)
@@ -309,7 +345,7 @@ Public Class HTTPHandle
         End Try
     End Function
 
-    Public Function Handle_ProjectAdd(ByVal context As HttpContext, data As Object) As NormalResponse '增加工程
+    Public Function Handle_ProjectAdd(ByVal context As HttpContext, data As Object, token As String) As NormalResponse '增加工程
 
         Try
             If IsNothing(data) Then Return New NormalResponse(False, "post data is null")
@@ -357,11 +393,10 @@ Public Class HTTPHandle
             Return New NormalResponse(False, "GetWorker Err:" & ex.Message & ",Step=" & Stepp)
         End Try
     End Function
-
+    '更新日报
     Public Function Handle_UpdateWorkLog(ByVal context As HttpContext) As NormalResponse '更新工作日志
         Dim Stepp As Single = 0
         Try
-            'CREATE TABLE Worklog(day varchar(50) not null,name varchar(50) not null, workContent varchar(2000) default '',issue varchar(200) default '',modifiedBy varchar(50) default '',ModifiedDate varchar(50) default '')
             Dim name As String = context.Request.QueryString("name")
             Dim day As String = context.Request.QueryString("day")
             Dim corp As String = context.Request.QueryString("corp")
@@ -369,29 +404,28 @@ Public Class HTTPHandle
             Dim issue As String = context.Request.QueryString("issue")
             Dim project As String = context.Request.QueryString("project")
             Dim city As String = context.Request.QueryString("city")
-
-            'Stepp = 1
+            Dim token As String = context.Request.QueryString("token")
+            Dim usrInfo As userInfo = GetUsrInfoByToken(token)
+            If IsNothing(usrInfo) Then Return New NormalResponse(False, "token无效")
             name = Trim(name) : day = Trim(day)
             If name = "" Then Return New NormalResponse(False, "必须输入名字")
             If day = "" Then Return New NormalResponse(False, "必须输入日期")
-            'If carrier <> "中国移动" And carrier <> "中国联通" And carrier <> "中国电信" Then Return New NormalResponse(False, "运营商错误")
 
             Dim Cond As String = "", sql As String
-
 
             If corp <> "" Then Cond = " corp='" & corp & "'"
             If workContent <> "" Then Cond = IIf(Cond.Length = 0, "", Cond & " , ") & " workContent ='" & workContent & "'"
             If issue <> "" Then Cond = IIf(Cond.Length = 0, "", Cond & " , ") & " issue ='" & issue & "'"
             If project <> "" Then Cond = IIf(Cond.Length = 0, "", Cond & " , ") & " project ='" & project & "'"
             If city <> "" Then Cond = IIf(Cond.Length = 0, "", Cond & " , ") & " city ='" & city & "'"
-            'If city <> "" Then Cond = IIf(Cond = 0, "", " and ") & " city ='" & city & "'"
 
             If Cond.Length = 0 Then
                 Return New NormalResponse(False, "WorkLog没有任何更新", name, "")
             End If
+            Cond = IIf(Cond.Length = 0, "", Cond & " , ") & " modifiedBy ='" & usrInfo.name & "'"
+            Cond = IIf(Cond.Length = 0, "", Cond & " , ") & " modifiedDate ='" & Now.ToString("yyyy-MM-dd HH:mm:ss") & "'"
             sql = "update Worklog set " & Cond & " where name='" & name & "' and day='" & day & "'"
 
-            Stepp = 3
             Dim result As String = ORALocalhost.SqlCMD(sql)
 
             If result = "success" Then
@@ -399,21 +433,12 @@ Public Class HTTPHandle
             Else
                 Return New NormalResponse(False, result)
             End If
-            Stepp = 4
-            ' "select province,city,district,netType,GDlon,GDlat,RSRP,time,SINR,eNodeBId,CellId from SDKTABLE"
-            'Carrier,province,city,district,netType,GDlon,GDlat,RSRP,time,SINR
-            'dt.Columns(0).ColumnName = "project"            ' dt.Columns(1).ColumnName = "carrier"
-            'dt.Columns(1).ColumnName = "workContent"
-            'dt.Columns(2).ColumnName = "issue"
 
-
-            'Stepp = 5
-            Return New NormalResponse(True, "", "", "")
         Catch ex As Exception
             Return New NormalResponse(False, "UpdateWorkLog Err:" & ex.Message & ",Step=" & Stepp)
         End Try
     End Function
-
+    '获取日报
     Public Function Handle_GetWorkLog(ByVal context As HttpContext) As NormalResponse '获取工作日志
         Dim Stepp As Single = 0
         Try
@@ -421,7 +446,6 @@ Public Class HTTPHandle
             Dim name As String = context.Request.QueryString("name")
             Dim day As String = context.Request.QueryString("day")
             Dim corp As String = context.Request.QueryString("corp")
-
             'Stepp = 1
             name = Trim(name) : day = Trim(day)
             If name = "" Then Return New NormalResponse(False, "必须输入名字")
@@ -456,12 +480,10 @@ Public Class HTTPHandle
             Return New NormalResponse(False, "GetWorkLog Err:" & ex.Message & ",Step=" & Stepp)
         End Try
     End Function
-
-    Public Function Handle_UploadWorkLog(context As HttpContext, data As Object) As NormalResponse '保存WorkLog
-        Dim Stepp As Integer = -1
+    '上传日报
+    Public Function Handle_UploadWorkLog(context As HttpContext, data As Object, token As String) As NormalResponse '保存WorkLog
         Try
             Dim str As String = JsonConvert.SerializeObject(data)
-            Stepp = 0
             Try
                 Dim DtList As List(Of workLogInfo) = JsonConvert.DeserializeObject(str, GetType(List(Of workLogInfo)))
                 If IsNothing(DtList) Then
@@ -470,7 +492,8 @@ Public Class HTTPHandle
                 If DtList.Count = 0 Then
                     Return New NormalResponse(False, "workLogList count =0")
                 End If
-                Stepp = 1
+                Dim usrInfo As userInfo = GetUsrInfoByToken(token)
+                If IsNothing(usrInfo) Then Return New NormalResponse(False, "token无效")
                 Dim colList() As String = GetOraTableColumns("workLog")
                 Dim dt As New DataTable
                 For Each col In colList
@@ -478,12 +501,17 @@ Public Class HTTPHandle
                         dt.Columns.Add(col)
                     End If
                 Next
-                Stepp = 2
+                Dim errDt As New DataTable
+                errDt.Columns.Add("fileName")
+                errDt.Columns.Add("error")
+                Dim dTmp As String = Now.ToString("yyyy-MM-dd HH:mm:ss")
                 For Each itm In DtList
+                    itm.modifiedDate = dTmp
+                    itm.modifiedBy = usrInfo.name
                     Dim row As DataRow = dt.NewRow
                     row("day".ToUpper) = itm.day
-                    row("name".ToUpper) = itm.name
-                    row("account".ToUpper) = itm.account
+                    row("name".ToUpper) = usrInfo.name
+                    row("account".ToUpper) = usrInfo.usr
                     row("project".ToUpper) = itm.project
                     row("workContent".ToUpper) = itm.WorkContent
                     row("city".ToUpper) = itm.city
@@ -491,27 +519,57 @@ Public Class HTTPHandle
                     row("modifiedBy".ToUpper) = itm.modifiedBy
                     row("modifiedDate".ToUpper) = itm.modifiedDate
                     row("corp".ToUpper) = itm.corp
-
                     row("memo".ToUpper) = itm.day & itm.name
-
+                    If IsNothing(itm.files) = False Then
+                        Dim workFiles As New List(Of workFileInfo2)
+                        Dim visualPath As String = "workLogFiles"
+                        Dim rootPath As String = System.Web.HttpContext.Current.Server.MapPath("~/" & visualPath & "/")
+                        Dim urlPath As String = "http://111.53.74.132:8091/" & visualPath & "/"
+                        For Each wf In itm.files
+                            Dim fileName As String = wf.fileName
+                            Dim base64 As String = wf.base64
+                            Dim nFileName As String = fileName
+                            Dim filePath As String = rootPath & nFileName
+                            Dim fileUrl As String = urlPath & nFileName
+                            If File.Exists(filePath) Then
+                                nFileName = Now.Ticks & "_" & fileName
+                                filePath = rootPath & nFileName
+                                fileUrl = urlPath & nFileName
+                            End If
+                            Try
+                                Dim buffer() As Byte = Convert.FromBase64String(base64)
+                                File.WriteAllBytes(filePath, buffer)
+                                workFiles.Add(New workFileInfo2(fileName, fileUrl))
+                            Catch ex As Exception
+                                Dim errRow As DataRow = errDt.NewRow
+                                errRow("fileName") = fileName
+                                errRow("error") = ex.ToString
+                                errDt.Rows.Add(errRow)
+                            End Try
+                        Next
+                        Dim fileUrlsJson As String = JsonConvert.SerializeObject(workFiles)
+                        row("fileUrls".ToUpper) = fileUrlsJson
+                    End If
                     dt.Rows.Add(row)
                 Next
-                Stepp = 20
+                If errDt.Rows.Count > 0 Then
+                    Dim np As New NormalResponse(False, "部分文件上传失败！", "", errDt)
+                    Return np
+                End If
                 Dim result As String = ORALocalhost.SqlCMDListQuickByPara("workLog", dt)
                 If result = "success" Then 'true
                     Dim np As New NormalResponse(True, "workLog success,Row=" & dt.Rows.Count, "", "")
                     Return np
 
                 Else
-                    Dim np As New NormalResponse(False, result & " step=" & Stepp, "", "")
+                    Dim np As New NormalResponse(False, result)
                     Return np
-
                 End If
             Catch ex As Exception
-                Return New NormalResponse(False, "workLog json格式非法,Step=" & Stepp & " err=" & ex.ToString)
+                Return New NormalResponse(False, "workLog json格式非法," & "err=" & ex.ToString)
             End Try
         Catch ex As Exception
-            Return New NormalResponse(False, "Upload workLog Err Step=" & Stepp & " " & ex.ToString)
+            Return New NormalResponse(False, "Upload workLog Err " & ex.ToString)
         End Try
     End Function
 
@@ -521,9 +579,6 @@ Public Class HTTPHandle
         Public json As String
         Public type As String
     End Structure
-
-
-
 
     Private Function GetOraTableColumns(tableName As String) As String()
         'select COLUMN_NAME from user_tab_columns where table_name ='QOE_REPORT_TABLE'
@@ -554,266 +609,22 @@ Public Class HTTPHandle
         sb.Append("where RN>=" & startIndex)
         Return sb.ToString
     End Function
-    Structure RunSQLInfo
-        Dim connStr As String
-        Dim sqllist As List(Of String)
-    End Structure
-    Private Function Decompress(ByVal data() As Byte) As Byte()
-        Dim stream As MemoryStream = New MemoryStream
-        Dim gZip As New GZipStream(New MemoryStream(data), CompressionMode.Decompress)
-        Dim n As Integer = 0
-        While True
-            Dim by(409600) As Byte
-            n = gZip.Read(by, 0, by.Length)
-            If n = 0 Then Exit While
-            stream.Write(by, 0, n)
-        End While
-        gZip.Close()
-        Return stream.ToArray
-    End Function
-    Public Function Handle_RunSQL(ByVal context As HttpContext, ByVal data As Object) As NormalResponse '按Sql来查询
-        Try
-            Dim str As String = data.ToString
-            Dim by() As Byte = Convert.FromBase64String(str)
-            Dim realBy() As Byte = Decompress(by)
-            str = Encoding.Default.GetString(realBy)
-            Dim runSqlInfo As RunSQLInfo = JsonConvert.DeserializeObject(str, GetType(RunSQLInfo))
-            If IsNothing(runSqlInfo) Then
-                Return New NormalResponse(False, "RunSQLInfo格式非法")
-            End If
-            If runSqlInfo.sqllist.Count = 0 Then
-                Return New NormalResponse(False, "RunSQLInfo.SqlList.count=0")
-            End If
-            Dim conn As String = runSqlInfo.connStr
-            Dim failcount As Integer = 0
-            Dim successcount As Integer = 0
-            Dim startTime As Date = Now
-            Dim result As String = SQLInsertSQLList(conn, runSqlInfo.sqllist)
-            'Dim th As New Thread(Sub()
-            '                         Dim conn As String = runSqlInfo.connStr
-            '                         Dim failCount As Integer = 0
-            '                         Dim successCount As Integer = 0
-            '                         For Each itm In runSqlInfo.sqllist
-            '                             If SQLCmdWithConn(conn, itm) Then
-            '                                 successCount = successCount + 1
-            '                             Else
-            '                                 failCount = failCount + 1
-            '                             End If
-            '                         Next
-            '                     End Sub)
-            'th.Start()
-            Dim np As NormalResponse
-            If result = "success" Then
-                np = New NormalResponse(True, result, "", "提交SQL总行数:" & runSqlInfo.sqllist.Count & ",耗时:" & GetTimeSpam(startTime))
-            Else
-                np = New NormalResponse(False, result, "", "提交SQL总行数:" & runSqlInfo.sqllist.Count & ",耗时:" & GetTimeSpam(startTime))
-            End If
-            Return np
-            'If failCount = 0 Then
-            '    Return New NormalResponse(True, "success")
-            'Else
-            '    Return New NormalResponse(True, "成功:" & successCount & ",失败:" & failCount)
-            'End If
-        Catch ex As Exception
-            Return New NormalResponse(False, ex.Message)
-        End Try
-    End Function
-    Structure GZfileInfo
-        Dim cellInfo As cellInfo
-        Dim eNodeBId As String
-        Dim base64 As String
-        Sub New(cellinfo As cellInfo, eNodeBId As String, base64 As String)
-            Me.cellInfo = cellinfo
-            Me.eNodeBId = eNodeBId
-            Me.base64 = base64
-        End Sub
-    End Structure
-    Structure cellInfo
-        Dim lon As Double
-        Dim lat As Double
-        Dim district As String
-        Dim province As String
-        Dim city As String
-        Dim grid As String
-        Dim siteType As Integer
-    End Structure
 
-
-    Private Function GetGridBySQL(lon As Double, lat As Double) As Integer
-        Dim sql As String = "select id from grid_Table where startlon<=" & lon & " and stoplon>=" & lon & " and startlat<=" & lat & " and stoplat>=" & lat
-        Dim dt As DataTable = ORALocalhost.SqlGetDT(sql)
-        If IsNothing(dt) Then Return 0
-        If dt.Rows.Count = 0 Then Return 0
-        Dim row As DataRow = dt.Rows(0)
-        Dim str As String = row(0)
-        If IsNothing(str) Then Return 0
-        If str = "" Then Return 0
-        If IsNumeric(str) = False Then Return 0
-        Return str
-    End Function
-    Private Function GetAoARand() As Integer
-        Return Int(Rnd() * 121) - 60
-    End Function
-    Private Function HandleMRDt(dt As DataTable) As DataTable
-        If IsNothing(dt) Then Return dt
-        'Dim sqlList As New List(Of String)
-        dt.Columns.Add("UElon")
-        dt.Columns.Add("UElat")
-        dt.Columns.Add("UEdis")
-        dt.Columns.Add("RSRP")
-        dt.Columns.Add("SINR")
-        dt.Columns.Add("BDlon")
-        dt.Columns.Add("BDlat")
-        dt.Columns.Add("UEBDlon")
-        dt.Columns.Add("UEBDlat")
-        dt.Columns.Add("GDlon")
-        dt.Columns.Add("GDlat")
-        dt.Columns.Add("UEGDlon")
-        dt.Columns.Add("UEGDlat")
-        'dt.Columns.Add("Grid")
-
-        For i = dt.Rows.Count - 1 To 0 Step -1
-            Dim row As DataRow = dt.Rows(i)
-            If IsNothing(row("LteScTadv")) Then Continue For
-            If IsNothing(row("LteScAOA")) Then Continue For
-            If IsNothing(row("LteScTadv")) Then Continue For
-            If IsNothing(row("LteScRSRP")) Then Continue For
-            If IsNothing(row("LteScSinrUL")) Then Continue For
-            If IsNothing(row("lon")) Then Continue For
-            If IsNothing(row("lat")) Then Continue For
-            If row("lon") = "NIL" Then Continue For
-            If row("lat") = "NIL" Then Continue For
-            If row("LteScTadv") = "NIL" Then Continue For
-            If row("LteScAOA") = "NIL" Then Continue For
-            If row("LteScTadv") = "NIL" Then Continue For
-            If row("LteScRSRP") = "NIL" Then Continue For
-            If row("LteScSinrUL") = "NIL" Then Continue For
-
-            Dim eNodebId As String = row("eNodebId")
-            Dim adv As Double = Val(row("LteScTadv"))
-            Dim aoa As Double = Val(row("LteScAOA"))
-            adv = adv * 78.12
-            aoa = 360 - (aoa / 2)
-            Dim oldAoa As Double = aoa
-            aoa = aoa + GetAoARand()
-            If aoa < 0 Or aoa > 360 Then aoa = oldAoa
-            Dim lon As Double = Val(row("lon"))
-            Dim lat As Double = Val(row("lat"))
-            Dim UElon As Double = lon + (adv * Sin(aoa)) / (111000 * Cos(lat * PI / 180))
-            Dim UElat As Double = lat + (adv * Cos(aoa * PI / 180)) / 111000
-            Dim dis As Double = GetDistance(lat, lon, UElat, UElon)
-            Dim RSRP As Double = row("LteScRSRP")
-            Dim SINR As Double = row("LteScSinrUL")
-            RSRP = RSRP - 140
-            Dim grid As Integer = GetGridBySQL(UElon, UElat)
-            If grid = 0 Then
-                dt.Rows(i).Delete()
-                Continue For
-            End If
-            row("UElon") = UElon
-            row("UElat") = UElat
-            row("UEdis") = dis
-            row("RSRP") = RSRP
-            row("SINR") = SINR
-
-            row("Grid") = grid
-            Dim BDlon, BDlat, BDUElon, BDUElat, GDlon, GDlat, GDUElon, GDUElat As Double
-            Dim BDxt1 As CoordInfo = GPS2BDS(lon, lat)
-            Dim BDxt2 As CoordInfo = GPS2BDS(UElon, UElat)
-            If IsNothing(BDxt1) = False And IsNothing(BDxt2) = False Then
-                BDlon = BDxt1.x
-                BDlat = BDxt1.y
-                BDUElon = BDxt2.x
-                BDUElat = BDxt2.y
-                row("BDlon") = BDlon
-                row("BDlat") = BDlat
-                row("UEBDlon") = BDUElon
-                row("UEBDlat") = BDUElat
-            End If
-            Dim GDxt1 As CoordInfo = GPS2GDS(lon, lat)
-            Dim GDxt2 As CoordInfo = GPS2GDS(UElon, UElat)
-            If IsNothing(GDxt1) = False And IsNothing(GDxt2) = False Then
-                GDlon = GDxt1.x
-                GDlat = GDxt1.y
-                GDUElon = GDxt2.x
-                GDUElat = GDxt2.y
-                row("GDlon") = GDlon
-                row("GDlat") = GDlat
-                row("UEGDlon") = GDUElon
-                row("UEGDlat") = GDUElat
-            End If
-        Next
-        Return dt
-    End Function
-    Private Function rad(ByVal d As Double) As Double
-        rad = d * PI / 180
-    End Function
-    Private Function GetDistance(ByVal lat1 As Double, ByVal lng1 As Double, ByVal lat2 As Double, ByVal lng2 As Double) As Double
-        Dim radlat1 As Double, radlat2 As Double
-        Dim a As Double, b As Double, s As Double, Temp As Double
-        radlat1 = rad(lat1)
-        radlat2 = rad(lat2)
-        a = radlat1 - radlat2
-        b = rad(lng1) - rad(lng2)
-        Temp = Sqrt(Sin(a / 2) ^ 2 + Cos(radlat1) * Cos(radlat2) * Sin(b / 2) ^ 2)
-        s = 2 * Atan(Temp / Sqrt(-Temp * Temp + 1))
-        s = s * 6378.137
-        Return Math.Round(s * 1000, 2)
-    End Function
-    Private Function GetTimeSpam(ByVal t As Date) As String
+    Private Function GetTimeSpan(ByVal t As Date) As String
         Dim endTime As Date = Now
         Dim ts As TimeSpan = endTime - t
         Dim str As String = ts.Hours.ToString("00") & ":" & ts.Minutes.ToString("00") & ":" & ts.Seconds.ToString("00") & "." & ts.Milliseconds.ToString("000")
         Return str
     End Function
-    Private Function SQLCmdWithConn(ByVal conn As String, ByVal CmdString As String) As Boolean
-        Try
-            Dim SQL As New MySqlConnection(conn)
-            SQL.Open()
-            Dim SQLCommand As MySqlCommand = New MySqlCommand(CmdString, SQL)
-            Dim ResultRowInt As Integer = SQLCommand.ExecuteNonQuery()
-            SQL.Close()
-            Return True
-        Catch ex As Exception
-            Return False
-        End Try
-    End Function
 
 
-    Public Function Handle_GetAccount(ByVal context As HttpContext) As NormalResponse '获得用户账号 
-        Dim Stepp As Single = 0
-        Try
-            Dim account As String = context.Request.QueryString("account") ' Dim city As String = context.Request.QueryString("city")
-            Dim passWord As String = context.Request.QueryString("passWord")
-            Dim state As String = context.Request.QueryString("state") '状态
-            Stepp = 1
 
-            If account = "" Then Return New NormalResponse(False, "用户名为空错误")
-            If passWord = "" Then Return New NormalResponse(False, "密码为空错误")
-
-            Dim sql As String = "select password from LogAccount where account='" & account & "' and state<>0" ' And " passWord ='" & passWord & "'"
-
-            Stepp = 3
-            Dim Str1 As String = ORALocalhost.SQLGetFirstRowCell(sql)
-            If passWord = Str1 Then
-                Return New NormalResponse(True, "用户名密码正确", ""， "")
-            Else
-                Return New NormalResponse(False, "用户名密码错误", "", "")
-            End If
-
-            'Stepp = 5
-
-        Catch ex As Exception
-            Return New NormalResponse(False, "GetAccount Err:" & ex.Message & ",Step=" & Stepp)
-        End Try
-    End Function
-
-    Public Function Handle_AccountAdd(ByVal context As HttpContext, data As Object) As NormalResponse '增加用户
+    Public Function Handle_AccountAdd(ByVal context As HttpContext, data As Object, token As String) As NormalResponse '增加用户
 
         Try
             If IsNothing(data) Then Return New NormalResponse(False, "post data is null")
             Dim str As String = JsonConvert.SerializeObject(data)
-            Dim mi As AccountInfo = JsonConvert.DeserializeObject(str, GetType(AccountInfo))
+            Dim mi As accountInfo = JsonConvert.DeserializeObject(str, GetType(accountInfo))
             If IsNothing(mi) Then Return New NormalResponse(False, "AccountInfo is null,maybe json is error")
 
             Dim sql As String = "insert into LogAccount (WORKID,ACCOUNT,PASSWORD,NAME,CORP,STATE) values ('{0}','{1}','{2}','{3}','{4}','{5}')"
@@ -871,9 +682,6 @@ Public Class HTTPHandle
             Return New NormalResponse(False, "AccountModify Err:" & ex.Message & ",Step=" & Stepp)
         End Try
     End Function
-
-
-
     Public Function Handle_GetIndexPageTable0(context As HttpContext) As NormalResponse '2018-12-23 09:54:00 更新 增加首页拼接表
         Try
             'Dim count As String = context.Request.QueryString("count")
@@ -960,15 +768,5 @@ Public Class HTTPHandle
             Return New NormalResponse(False, ex.ToString)
         End Try
     End Function
-    Public Function Handle_GetQOEVideoSource(context As HttpContext) As NormalResponse
-        Try
-            Dim sql As String = "select * from QOE_VIDEO_SOURCE where isuse=1"
-            Dim dt As DataTable = ORALocalhost.SqlGetDT(sql)
-            If IsNothing(dt) Then Return New NormalResponse(False, "dt is null")
-            If dt.Rows.Count = 0 Then Return New NormalResponse(False, "dt.rows.count=0")
-            Return New NormalResponse(True, "", "", dt)
-        Catch ex As Exception
-            Return New NormalResponse(False, ex.ToString)
-        End Try
-    End Function
+
 End Class

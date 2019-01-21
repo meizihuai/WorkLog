@@ -10,6 +10,7 @@ Imports System.Net.Sockets
 Module Mod_Response
     Structure PostStu
         Dim func As String
+        Dim token As String
         Dim data As Object
     End Structure
 

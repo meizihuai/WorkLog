@@ -59,33 +59,23 @@
     <OptionInfer>On</OptionInfer>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="ConvertGPS">
-      <HintPath>..\..\..\..\..\ConvertGPS.dll</HintPath>
-    </Reference>
-    <Reference Include="EPPlus">
-      <HintPath>..\..\..\..\..\EPPlus.dll</HintPath>
-    </Reference>
-    <Reference Include="Mono.Security">
-      <HintPath>..\..\..\..\..\Mono.Security.dll</HintPath>
-    </Reference>
-    <Reference Include="MySql.Data">
-      <HintPath>..\..\..\..\..\dlls\MySql.Data.dll</HintPath>
+    <Reference Include="EPPlus, Version=4.5.3.0, Culture=neutral, PublicKeyToken=ea159fdaa78159a1, processorArchitecture=MSIL">
+      <HintPath>..\packages\EPPlus.4.5.3\lib\net40\EPPlus.dll</HintPath>
     </Reference>
     <Reference Include="Newtonsoft.Json, Version=6.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\..\..\Newtonsoft.Json.dll</HintPath>
     </Reference>
-    <Reference Include="Npgsql">
-      <HintPath>..\..\..\..\..\Npgsql.dll</HintPath>
+    <Reference Include="Oracle.ManagedDataAccess, Version=4.122.18.3, Culture=neutral, PublicKeyToken=89b483f429c47342, processorArchitecture=MSIL">
+      <HintPath>..\packages\Oracle.ManagedDataAccess.18.3.0\lib\net40\Oracle.ManagedDataAccess.dll</HintPath>
     </Reference>
-    <Reference Include="Oracle.ManagedDataAccess">
-      <HintPath>..\..\..\..\..\Oracle.ManagedDataAccess.dll</HintPath>
-    </Reference>
+    <Reference Include="PresentationCore" />
     <Reference Include="System" />
     <Reference Include="System.Data" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Core" />
     <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="System.Security" />
     <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Web.DynamicData" />
@@ -142,7 +132,6 @@
     </Compile>
     <Compile Include="HTTPHandle.vb" />
     <Compile Include="Module1.vb" />
-    <Compile Include="Module2.vb" />
     <Compile Include="Mod_Response.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />
     <Compile Include="My Project\Application.Designer.vb">
@@ -182,11 +171,13 @@
       <Generator>MyApplicationCodeGenerator</Generator>
       <LastGenOutput>Application.Designer.vb</LastGenOutput>
     </None>
+    <None Include="My Project\PublishProfiles\CustomProfile.pubxml" />
     <None Include="My Project\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <CustomToolNamespace>My</CustomToolNamespace>
       <LastGenOutput>Settings.Designer.vb</LastGenOutput>
     </None>
+    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup />
   <PropertyGroup>

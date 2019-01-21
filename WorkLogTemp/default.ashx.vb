@@ -35,11 +35,22 @@ Public Class _default1
             Return
         End If
         If method.ToLower = "get" Then
-            'myResponse(context, New NormalResponse(True, 1, 2, 3))
-            'Return
-
-
             Dim func As String = context.Request.QueryString("func")
+            Dim token As String = context.Request.QueryString("token")
+            If func <> "login" Then
+                If IsNothing(token) Then
+                    myResponse(context, New NormalResponse(False, "token无效"))
+                    Return
+                End If
+                If token = "" Then
+                    myResponse(context, New NormalResponse(False, "token无效"))
+                    Return
+                End If
+                If CheckToken(token) = False Then
+                    myResponse(context, New NormalResponse(False, "token无效"))
+                    Return
+                End If
+            End If
             Try
                 Dim n As New HTTPHandle()
                 Dim t As Type = n.GetType()
@@ -74,12 +85,27 @@ Public Class _default1
         Try
             Dim ps As PostStu = JsonConvert.DeserializeObject(body, GetType(PostStu))
             func = ps.func
+            Dim token As String = ps.token
+            If func <> "login" Then
+                If IsNothing(token) Then
+                    myResponse(context, New NormalResponse(False, "token无效"))
+                    Return
+                End If
+                If token = "" Then
+                    myResponse(context, New NormalResponse(False, "token无效"))
+                    Return
+                End If
+                If CheckToken(token) = False Then
+                    myResponse(context, New NormalResponse(False, "token无效"))
+                    Return
+                End If
+            End If
             Try
                 Dim n As New HTTPHandle()
                 Dim t As Type = n.GetType()
                 Dim obj As Object = Activator.CreateInstance(t)
                 Dim mf As MethodInfo = t.GetMethod("Handle_" & func)
-                Dim ok As Object = mf.Invoke(obj, New Object() {context, ps.data})
+                Dim ok As Object = mf.Invoke(obj, New Object() {context, ps.data, token})
                 Dim np As NormalResponse = CType(ok, NormalResponse)
                 If IsNothing(np) = False Then
                     myResponse(context, np)
