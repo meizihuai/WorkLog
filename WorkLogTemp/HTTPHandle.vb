@@ -19,6 +19,8 @@ Imports System.Xml
 Imports System.Web
 Imports System.Reflection
 Imports System.IO.Compression
+Imports OfficeOpenXml
+
 
 Public Class HTTPHandle
     Structure loginInfo
@@ -369,7 +371,6 @@ Public Class HTTPHandle
         Dim Stepp As Single = 0
         Try
             'CREATE TABLE Worklog(day varchar(50) not null,name varchar(50) not null, workContent varchar(2000) default '',issue varchar(200) default '',modifiedBy varchar(50) default '',ModifiedDate varchar(50) default '')
-
             Dim sql As String = "select account,name from LogAccount where state<>'0'"
 
             Stepp = 3
@@ -768,5 +769,106 @@ Public Class HTTPHandle
             Return New NormalResponse(False, ex.ToString)
         End Try
     End Function
+    Structure PersonalWeeklogInfo
+        Dim name As String
+        Dim weekDay As String
+        Dim thisWeekWork As String
+        Dim problem As String
+        Dim nextWeekWork As String
+        Dim advice As String
+    End Structure
+    '前端发起制作周报命令
+    Public Function Handle_DoPersonalWeekLog(context As HttpContext, data As Object, token As String) As NormalResponse
+        Try
+            Dim str As String = JsonConvert.SerializeObject(data)
+            Dim pi As PersonalWeeklogInfo = JsonConvert.DeserializeObject(str, GetType(PersonalWeeklogInfo))
+            If IsNothing(pi) Then Return New NormalResponse(False, "PersonalWeeklogInfo格式非法")
+            Dim np As NormalResponse = DoPersonalWeekLog(pi)
+            Return np
+        Catch ex As Exception
+            Return New NormalResponse(False, ex.ToString)
+        End Try
+    End Function
+    '制作周报
+    Private Function DoPersonalWeekLog(pi As PersonalWeeklogInfo) As NormalResponse
+        '  Log("制作周报，用户:" & name)
+        Dim name As String = pi.name
+        Dim weekday As Date
+        If pi.weekDay = "thisWeek" Then
+            weekDay = Now
+        Else
+            weekDay = Date.Parse(pi.weekDay)
+        End If
+        Dim thisWeekWork As String = pi.thisWeekWork
+        Dim problem As String = pi.problem
+        Dim nextWeekWork As String = pi.nextWeekWork
+        Dim advice As String = pi.advice
 
+        Dim weekStart As Date = GetWeekStart(weekDay)
+        Dim weekEnd As Date = weekStart.AddDays(6)
+        Dim weekStartStr As String = weekStart.ToString("yyyy-MM-dd")
+        Dim weekEndStr As String = weekEnd.ToString("yyyy-MM-dd")
+        ' Log("选择日期 " & GetWeekday(weekDay) & ",星期六:" & weekStartStr & ",星期五:" & weekEndStr)
+        ' Log("查询数据库...")
+        Dim sql As String = "select * from worklog where name='{0}' and day between '{1}' and '{2}' order by day asc"
+        sql = String.Format(sql, New String() {name, weekStartStr, weekEndStr})
+        Dim dt As DataTable = ORALocalhost.SqlGetDT(sql)
+        If IsNothing(dt) Then
+            ' Log("没有数据")
+            Return New NormalResponse(False, "没有查询到该用户本周数据")
+        End If
+        If dt.Rows.Count = 0 Then
+            Return New NormalResponse(False, "没有查询到该用户本周数据")
+        End If
+        ' Log("数据行数:" & dt.Rows.Count)
+        ' Log("读取模板...")
+        Dim excelModuleFilePath As String = ""
+        Dim moduleFilePath As String = System.Web.HttpContext.Current.Server.MapPath("~/dev/个人周报模板.xlsx")
+        Dim excel As New ExcelPackage(New FileInfo(moduleFilePath))
+        Dim sheet As ExcelWorksheet = excel.Workbook.Worksheets(1)
+        sheet.Cells(2, 2).Value = name  '写周报的人员名称
+        sheet.Cells(2, 5).Value = weekEndStr  '写周报的日期  周五
+        Dim workCount As Integer = dt.Rows.Count
+        For i = 0 To 6
+            sheet.Cells(i + 5, 2).Value = weekStart.AddDays(i).ToString("MM月dd日")
+            Dim writeDay As String = weekStart.AddDays(i).ToString("yyyy-MM-dd")
+            For Each row As DataRow In dt.Rows
+                Dim thisDay As String = row("DAY")
+                If thisDay = writeDay Then
+                    Dim project As String = row("project".ToUpper).ToString
+                    Dim workContent As String = row("workContent".ToUpper).ToString
+                    Dim city As String = row("city".ToUpper).ToString
+                    sheet.Cells(i + 5, 3).Value = city
+                    sheet.Cells(i + 5, 4).Value = project
+                    sheet.Cells(i + 5, 6).Value = workContent
+                    Exit For
+                End If
+            Next
+        Next
+        sheet.Cells(12, 2).Value = thisWeekWork
+        sheet.Cells(13, 2).Value = problem
+        sheet.Cells(14, 2).Value = nextWeekWork
+        sheet.Cells(15, 2).Value = advice
+        Dim saveFileName As String = "周报-{0}({1}-{2}).xlsx"
+        saveFileName = String.Format(saveFileName, New String() {name, weekStart.ToString("yyyyMMdd"), weekEnd.ToString("MMdd")})
+        'Log("保存Excel到文件 " & saveFilePath)
+        Dim visualPath As String = "worklogfiles"
+        Dim rootPath As String = System.Web.HttpContext.Current.Server.MapPath("~/" & visualPath & "/") & "personalWeekLogExcel/"
+        Dim saveFilePath As String = rootPath & saveFileName
+        If File.Exists(saveFilePath) Then File.Delete(saveFilePath)
+        excel.SaveAs(New FileInfo(saveFilePath))
+        Dim url As String = "http://111.53.74.132:8091/" & visualPath & "/personalWeekLogExcel/" & saveFileName
+        Return New NormalResponse(True, "", "", url)
+        'Log("Done!")
+    End Function
+    Private Function GetWeekday(d As Date) As String
+        Dim week As String() = {"星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"}
+        Dim weekInt As Integer = Convert.ToInt32(d.DayOfWeek)
+        Return week(weekInt)
+    End Function
+    Private Function GetWeekStart(d As Date) As Date
+        Dim week As String() = {"星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"}
+        Dim weekInt As Integer = Convert.ToInt32(d.DayOfWeek)
+        Return d.AddDays(-1 * weekInt - 1)
+    End Function
 End Class

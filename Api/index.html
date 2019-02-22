@@ -19,7 +19,7 @@
             // AccountModify();
             // GetWorker();
             //UpdateWorkLog();
-            GetWorkLog();
+          //  GetWorkLog();
            //  UploadWorkLog();
             //
             //GetProject();
@@ -29,6 +29,30 @@
             //UploadWeekLog();
               //UpdateWeekLog();
           //  GetWeekLog();
+           DoPersonalWeekLog();
+        }
+        function DoPersonalWeekLog(){
+            var PersonalWeeklogInfo={
+                name:"赵国伟",
+                weekDay:"2019-01-14",   //制作周报的日期，周报从上周六到本周五，比如2019-01-14处在12日(上周六)到18日(本周五)之间
+                                        //则本次将会制作 12日到18日的周报。
+                                        //weekDay还可以写为"thisWeek",表示制作本周，后台会自动计算起始和终止的日期
+                thisWeekWork:"1.测试one 2.测试two",  //本周工作小结
+                problem:"发现problem",  //存在问题
+                nextWeekWork:"继续上周工作",  //下周工作
+                advice:"工作建议测试"
+            }
+            var d={
+                func:"DoPersonalWeekLog", 
+                token:"928453310",   //928453310是一个特殊的token,不代表任何用户，用于开发调试一些不需要根据token来识别用户的接口
+                                     //本接口暂不需要根据token识别用户，因此可以用特殊token;
+                                     //如 新增周报 接口是只能用户给自己新增，后台是根据token来识别用户的，因此不能用特殊token
+                data:PersonalWeeklogInfo
+            }
+            var str=JSON.stringify(d);
+            $.post(u,str,function(data){
+                log(data);
+            },"text");
         }
         function login() {  //用户登陆
             var d = {
@@ -224,7 +248,6 @@
             log("update GetUpdateWorkLog...");
             var d = {
                 func: "UpdateWorkLog",
-
                 day: "2019-01-12",
                 account: "test",
                 name: "test",
