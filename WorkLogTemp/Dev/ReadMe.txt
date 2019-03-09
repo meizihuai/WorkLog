@@ -3,7 +3,7 @@
 
 logAccount
 
-"CREATE TABLE LogAccount(WorkID varchar(50) not null,account varchar(50) not null primary key,password Varchar(100) not null, name varchar(100) not null,corp varchar(50) default '',state varchar(20))" 
+"CREATE TABLE LogAccount(account varchar(50) not null primary key,password Varchar(100) not null, name varchar(100) not null,corp varchar(50) default '',state varchar(20))" 
 
 logProject
 "CREATE TABLE logProject(project varchar(50) not null primary key,corp varchar(50) default '',state varchar(20))" 

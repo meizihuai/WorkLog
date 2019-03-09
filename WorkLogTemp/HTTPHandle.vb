@@ -27,10 +27,12 @@ Public Class HTTPHandle
         Dim usr As String
         Dim name As String
         Dim token As String
-        Sub New(usr As String, name As String, token As String)
+        Dim power As Integer
+        Sub New(usr As String, name As String, token As String, power As Integer)
             Me.usr = usr
             Me.name = name
             Me.token = token
+            Me.power = power
         End Sub
     End Structure
     Structure workLogInfo
@@ -62,19 +64,19 @@ Public Class HTTPHandle
 
     Structure accountInfo
 
-        Dim workID As String
+
         Dim account As String
         Dim password As String
         Dim name As String
         Dim corp As String
         Dim state As String '是否正常
-
+        Dim power As Integer
     End Structure
     Structure logProjectInfo
         Dim project As String
         Dim corp As String
-        Dim state As String '0则为关闭
-
+        Dim state As String
+        Dim accounts As String()
     End Structure
 
     Structure weekLogInfo
@@ -105,7 +107,7 @@ Public Class HTTPHandle
             Dim passWord As String = context.Request.QueryString("pwd")
             If account = "" Then Return New NormalResponse(False, "用户名为空")
             If passWord = "" Then Return New NormalResponse(False, "密码为空")
-            Dim sql As String = "select password,token,name from LogAccount where account='" & account & "' and state<>0" ' And " passWord ='" & passWord & "'"
+            Dim sql As String = "select password,token,name,power from LogAccount where account='" & account & "' and state<>0" ' And " passWord ='" & passWord & "'"
             Dim dt As DataTable = ORALocalhost.SqlGetDT(sql)
             If IsNothing(dt) Then Return New NormalResponse(False, "用户名或密码错误")
             If dt.Rows.Count = 0 Then Return New NormalResponse(False, "用户名或密码错误")
@@ -113,12 +115,13 @@ Public Class HTTPHandle
             Dim OraPwd As String = row("password".ToUpper).ToString
             Dim OraToken As String = row("token".ToUpper).ToString
             Dim oraName As String = row("name".ToUpper).ToString
+            Dim power As String = row("power".ToUpper).ToString
             If IsDBNull(OraToken) Then OraToken = ""
             If OraPwd = passWord Then
                 If OraToken = "" Then
                     OraToken = GetNewToken(account, True)
                 End If
-                Dim linfo As New loginInfo(account, oraName, OraToken)
+                Dim linfo As New loginInfo(account, oraName, OraToken, power)
                 Return New NormalResponse(True, "success", "", linfo)
             Else
                 Return New NormalResponse(False, "用户名或密码错误", "", "")
@@ -296,29 +299,16 @@ Public Class HTTPHandle
     End Function
 
     Public Function Handle_GetProject(ByVal context As HttpContext) As NormalResponse '获取项目名称
-        Dim Stepp As Single = 0
         Try
-
-            Dim sql As String = "select project,corp from logProject where state<>'0'"
-
-            Stepp = 3
+            Dim token As String = context.Request.QueryString("token")
+            Dim usrInfo As userInfo = GetUsrInfoByToken(token)
+            If IsNothing(usrInfo) Then Return New NormalResponse(False, "您的权限不足，不能执行此命令")
+            If usrInfo.power <> 9 Then Return New NormalResponse(False, "您的权限不足，不能执行此命令")
+            Dim sql As String = "select * from logProject where state<>'0'"
             Dim dt As DataTable = ORALocalhost.SqlGetDT(sql)
-            If IsNothing(dt) Then
-                Return New NormalResponse(False, "project 没有任何数据nothing", sql, "")
-            End If
-            If dt.Rows.Count = 0 Then
-                Return New NormalResponse(False, "project 没有任何数据", sql, "")
-            End If
-            Stepp = 4
-            ' "select province,city,district,netType,GDlon,GDlat,RSRP,time,SINR,eNodeBId,CellId from SDKTABLE"
-            'Carrier,province,city,district,netType,GDlon,GDlat,RSRP,time,SINR
-            dt.Columns(0).ColumnName = "project"            ' dt.Columns(1).ColumnName = "carrier"
-            dt.Columns(1).ColumnName = "corp"
-
-            'Stepp = 5
-            Return New NormalResponse(True, "", "", dt)
+            Return New NormalResponse(dt)
         Catch ex As Exception
-            Return New NormalResponse(False, "GetProject Err:" & ex.Message & ",Step=" & Stepp)
+            Return New NormalResponse(False, ex.ToString)
         End Try
     End Function
     Public Function Handle_CloseProject(ByVal context As HttpContext) As NormalResponse 'Close project
@@ -346,22 +336,105 @@ Public Class HTTPHandle
             Return New NormalResponse(False, "close project Err:" & ex.Message & ",Step=" & Stepp)
         End Try
     End Function
-
-    Public Function Handle_ProjectAdd(ByVal context As HttpContext, data As Object, token As String) As NormalResponse '增加工程
+    '增加项目
+    Public Function Handle_AddProject(ByVal context As HttpContext, data As Object, token As String) As NormalResponse
 
         Try
+            Dim usrInfo As userInfo = GetUsrInfoByToken(token)
+            If IsNothing(usrInfo) Then Return New NormalResponse(False, "您的权限不足，不能执行此命令")
+            If usrInfo.power <> 9 Then Return New NormalResponse(False, "您的权限不足，不能执行此命令")
             If IsNothing(data) Then Return New NormalResponse(False, "post data is null")
             Dim str As String = JsonConvert.SerializeObject(data)
             Dim mi As logProjectInfo = JsonConvert.DeserializeObject(str, GetType(logProjectInfo))
             If IsNothing(mi) Then Return New NormalResponse(False, "ProjectInfo is null,maybe json is error")
-
-            Dim sql As String = "insert into logProject (PROJECT,CORP,STATE) values ('{0}','{1}','{2}')"
-            sql = String.Format(sql, New String() {mi.project, mi.corp, mi.state})
+            If mi.project = "" Then Return New NormalResponse(False, "项目名不能为空")
+            If ORALocalhost.SqlIsIn("select * from logProject where project='" & mi.project & "'") Then
+                Return New NormalResponse(False, "该项目名已存在")
+            End If
+            Dim sql As String = "insert into logProject (PROJECT,CORP,STATE,accounts,creater) values ('{0}','{1}','{2}','{3}','{4}')"
+            Dim accounts As String = ""
+            If IsNothing(mi.accounts) = False Then
+                accounts = JsonConvert.SerializeObject(mi.accounts)
+            End If
+            sql = String.Format(sql, New String() {mi.project, mi.corp, 1, accounts, usrInfo.usr})
             Dim result As String = ORALocalhost.SqlCMD(sql)
             If result = "success" Then
                 Return New NormalResponse(True, result)
             Else
                 Return New NormalResponse(False, result, "", sql)
+            End If
+        Catch ex As Exception
+            Return New NormalResponse(False, ex.ToString)
+        End Try
+    End Function
+    '修改项目
+    Public Function Handle_UpdateProject(ByVal context As HttpContext, data As Object, token As String) As NormalResponse
+        Try
+            Dim usrInfo As userInfo = GetUsrInfoByToken(token)
+            If IsNothing(usrInfo) Then Return New NormalResponse(False, "您的权限不足，不能执行此命令")
+            If usrInfo.power <> 9 Then Return New NormalResponse(False, "您的权限不足，不能执行此命令")
+            If IsNothing(data) Then Return New NormalResponse(False, "post data is null")
+            Dim str As String = JsonConvert.SerializeObject(data)
+            Dim mi As logProjectInfo = JsonConvert.DeserializeObject(str, GetType(logProjectInfo))
+            If IsNothing(mi) Then Return New NormalResponse(False, "ProjectInfo is null,maybe json is error")
+            If mi.project = "" Then Return New NormalResponse(False, "项目名不能为空")
+            Dim sql As String = "select creater from logProject where project='" & mi.project & "'"
+            Dim dt As DataTable = ORALocalhost.SqlGetDT(sql)
+            If IsNothing(dt) Then
+                Return New NormalResponse(False, "该项目名不存在")
+            End If
+            If dt.Rows.Count = 0 Then
+                Return New NormalResponse(False, "该项目名不存在")
+            End If
+            Dim creater As String = dt.Rows(0)(0)
+            If creater <> usrInfo.usr Then
+                Return New NormalResponse(False, "您不是该项目创建者，无法更新项目资料")
+            End If
+            '  Dim sql As String = "update  logProject (PROJECT,CORP,STATE,accounts,creater) values ('{0}','{1}','{2}','{3}','{4}')"
+            sql = "update logProject set CORP='{0}',STATE='{1}',accounts='{2}' where project='" & mi.project & "'"
+            Dim accounts As String = ""
+            If IsNothing(mi.accounts) = False Then
+                accounts = JsonConvert.SerializeObject(mi.accounts)
+            End If
+            sql = String.Format(sql, New String() {mi.corp, mi.state, accounts})
+            Dim result As String = ORALocalhost.SqlCMD(sql)
+            If result = "success" Then
+                Return New NormalResponse(True, result)
+            Else
+                Return New NormalResponse(False, result, "", sql)
+            End If
+        Catch ex As Exception
+            Return New NormalResponse(False, ex.ToString)
+        End Try
+    End Function
+    '删除项目
+    Public Function Handle_DeleteProject(context As HttpContext) As NormalResponse
+        Try
+            Dim token As String = context.Request.QueryString("token")
+            Dim project As String = context.Request.QueryString("project")
+            Dim usrInfo As userInfo = GetUsrInfoByToken(token)
+            If IsNothing(usrInfo) Then Return New NormalResponse(False, "您的权限不足，不能执行此命令")
+            If usrInfo.power <> 9 Then Return New NormalResponse(False, "您的权限不足，不能执行此命令")
+            If IsNothing(project) Then Return New NormalResponse(False, "项目名不能为空")
+            project = HttpUtility.UrlDecode(project)
+            Dim sql As String = "select creater from logProject where project='" & project & "'"
+            Dim dt As DataTable = ORALocalhost.SqlGetDT(sql)
+            If IsNothing(dt) Then
+                Return New NormalResponse(False, "该项目名不存在")
+            End If
+            If dt.Rows.Count = 0 Then
+                Return New NormalResponse(False, "该项目名不存在")
+            End If
+            Dim creater As String = dt.Rows(0)(0)
+            If creater <> usrInfo.usr Then
+                Return New NormalResponse(False, "您不是该项目创建者，无法删除该项目")
+            End If
+            sql = "delete from logProject where project='" & project & "'"
+            Dim result As String = ORALocalhost.SqlCMD(sql)
+            If result = "success" Then
+                Return New NormalResponse(True, result)
+            Else
+                Return New NormalResponse(False, result)
             End If
         Catch ex As Exception
             Return New NormalResponse(False, ex.ToString)
@@ -409,9 +482,13 @@ Public Class HTTPHandle
             Dim usrInfo As userInfo = GetUsrInfoByToken(token)
             If IsNothing(usrInfo) Then Return New NormalResponse(False, "token无效")
             name = Trim(name) : day = Trim(day)
+            name = usrInfo.name
             If name = "" Then Return New NormalResponse(False, "必须输入名字")
             If day = "" Then Return New NormalResponse(False, "必须输入日期")
-
+            If project = "" Then Return New NormalResponse(False, "必须输入项目名")
+            If CheckUsrAndProject(usrInfo.usr, project) <> "success" Then
+                Return New NormalResponse(False, "您无法更新此项目日志")
+            End If
             Dim Cond As String = "", sql As String
 
             If corp <> "" Then Cond = " corp='" & corp & "'"
@@ -425,7 +502,7 @@ Public Class HTTPHandle
             End If
             Cond = IIf(Cond.Length = 0, "", Cond & " , ") & " modifiedBy ='" & usrInfo.name & "'"
             Cond = IIf(Cond.Length = 0, "", Cond & " , ") & " modifiedDate ='" & Now.ToString("yyyy-MM-dd HH:mm:ss") & "'"
-            sql = "update Worklog set " & Cond & " where name='" & name & "' and day='" & day & "'"
+            sql = "update Worklog set " & Cond & " where name='" & name & "' and day='" & day & "' and project='" & project & "'"
 
             Dim result As String = ORALocalhost.SqlCMD(sql)
 
@@ -502,6 +579,21 @@ Public Class HTTPHandle
                         dt.Columns.Add(col)
                     End If
                 Next
+                For Each itm In DtList
+                    Dim account As String = usrInfo.usr
+                    Dim day As String = itm.day
+                    Dim project As String = itm.project
+                    Dim checkMsg As String = CheckUsrAndProject(account, project)
+                    If checkMsg <> "success" Then
+                        Return New NormalResponse(False, checkMsg)
+                    End If
+                    Dim tmp As String = "select * from workLog where account='{0}' and day='{1}' and project='{2}'"
+                    tmp = String.Format(tmp, New String() {account, day, project})
+                    Dim bool As Boolean = ORALocalhost.SqlIsIn(tmp)
+                    If bool Then
+                        Return New NormalResponse(False, "数据库已存在您的项目'" & project & "' 日期为'" & day & "'的日志,该项目该天的内容可通过'更新日志'功能来实现修改")
+                    End If
+                Next
                 Dim errDt As New DataTable
                 errDt.Columns.Add("fileName")
                 errDt.Columns.Add("error")
@@ -573,6 +665,76 @@ Public Class HTTPHandle
             Return New NormalResponse(False, "Upload workLog Err " & ex.ToString)
         End Try
     End Function
+    Private Function CheckUsrAndProject(usr As String, project As String) As String
+        Dim sql As String = "select * from logProject where project='" & project & "'"
+        Dim dt As DataTable = ORALocalhost.SqlGetDT(sql)
+        If IsNothing(dt) Then
+            Return "没有该项目"
+        End If
+        If dt.Rows.Count = 0 Then
+            Return "没有该项目"
+        End If
+        For Each row As DataRow In dt.Rows
+            Dim projectName As String = row("Project".ToUpper)
+            Dim corp As String = row("corp".ToUpper)
+            Dim state As String = row("state".ToUpper)
+            Dim accounts As String = row("accounts".ToUpper)
+            Dim creater As String = row("creater".ToUpper)
+            If projectName = project Then
+                If state <> "1" Then
+                    Return "该项目已关闭，无法新增该项目日志"
+                End If
+                If IsNothing(accounts) = False Then
+                    If IsDBNull(accounts) = False Then
+                        If accounts <> "" Then
+                            Try
+                                Dim usrs() As String = JsonConvert.DeserializeObject(Of String())(accounts)
+                                If IsNothing(usrs) = False Then
+                                    If usrs.Contains(usr) Then
+                                        Return "success"
+                                    End If
+                                End If
+                            Catch ex As Exception
+                                Return "您无法在该项目中新增日志," & ex.ToString
+                            End Try
+                        End If
+                    End If
+                End If
+                Exit For
+            End If
+        Next
+        Dim msg As String = "您无法在该项目中新增日志"
+        Return msg
+    End Function
+    '删除日报
+    Public Function Handle_DeleteWorkLog(ByVal context As HttpContext) As NormalResponse
+        Try
+            Dim day As String = context.Request.QueryString("day")
+            Dim project As String = context.Request.QueryString("project")
+            Dim token As String = context.Request.QueryString("token")
+            project = HttpUtility.UrlDecode(project)
+            If day = "" Then Return New NormalResponse(False, "必须输入日期")
+            If project = "" Then Return New NormalResponse(False, "必须输入项目")
+            Dim account As String = GetUsrByToken(token)
+            Dim sql As String = "select * from workLog where account='{0}' and day='{1}' and project='{2}'"
+            sql = String.Format(sql, New String() {account, day, project})
+            Dim bool As Boolean = ORALocalhost.SqlIsIn(sql)
+            If Not bool Then
+                Return New NormalResponse(False, "当前日期当前项目记录不存在,日期=" & day & ",项目=" & project)
+            End If
+
+            sql = "delete from workLog where account='{0}' and day='{1}' and project='{2}'"
+            sql = String.Format(sql, New String() {account, day, project})
+            Dim result As String = ORALocalhost.SqlCMD(sql)
+            If result = "success" Then
+                Return New NormalResponse(True, result)
+            Else
+                Return New NormalResponse(False, result)
+            End If
+        Catch ex As Exception
+            Return New NormalResponse(False, ex.ToString)
+        End Try
+    End Function
 
     Structure LocalTestInfo
         Public id As Integer
@@ -618,18 +780,24 @@ Public Class HTTPHandle
         Return str
     End Function
 
-
-
-    Public Function Handle_AccountAdd(ByVal context As HttpContext, data As Object, token As String) As NormalResponse '增加用户
-
+    '增加用户账号
+    Public Function Handle_AddAccount(ByVal context As HttpContext, data As Object, token As String) As NormalResponse
         Try
+            Dim usrInfo As userInfo = GetUsrInfoByToken(token)
+            If IsNothing(usrInfo) Then Return New NormalResponse(False, "您的权限不足，不能执行此命令")
+            If usrInfo.power <> 9 Then Return New NormalResponse(False, "您的权限不足，不能执行此命令")
             If IsNothing(data) Then Return New NormalResponse(False, "post data is null")
             Dim str As String = JsonConvert.SerializeObject(data)
             Dim mi As accountInfo = JsonConvert.DeserializeObject(str, GetType(accountInfo))
             If IsNothing(mi) Then Return New NormalResponse(False, "AccountInfo is null,maybe json is error")
-
-            Dim sql As String = "insert into LogAccount (WORKID,ACCOUNT,PASSWORD,NAME,CORP,STATE) values ('{0}','{1}','{2}','{3}','{4}','{5}')"
-            sql = String.Format(sql, New String() {mi.workID, mi.account, mi.password, mi.name, mi.corp, mi.state})
+            If ORALocalhost.SqlIsIn("select * from LogAccount where ACCOUNT='" & mi.account & "'") Then
+                Return New NormalResponse(False, "该账号已存在")
+            End If
+            If mi.power >= usrInfo.power Then
+                Return New NormalResponse(False, "您不能创建与您同等、高等账户")
+            End If
+            Dim sql As String = "insert into LogAccount (ACCOUNT,PASSWORD,NAME,CORP,STATE,power) values ('{0}','{1}','{2}','{3}','{4}','{5}')"
+            sql = String.Format(sql, New String() {mi.account, mi.password, mi.name, mi.corp, mi.state, mi.power})
             Dim result As String = ORALocalhost.SqlCMD(sql)
             If result = "success" Then
                 Return New NormalResponse(True, result)
@@ -640,47 +808,65 @@ Public Class HTTPHandle
             Return New NormalResponse(False, ex.ToString)
         End Try
     End Function
-    Public Function Handle_AccountModify(ByVal context As HttpContext) As NormalResponse '修改用户密码
+    '修改账户
+    Public Function Handle_UpdateAccount(ByVal context As HttpContext, data As Object, token As String) As NormalResponse
         Dim Stepp As Single = 0
         Try
-            'CREATE TABLE Worklog(day varchar(50) not null,name varchar(50) not null, workContent varchar(2000) default '',issue varchar(200) default '',modifiedBy varchar(50) default '',ModifiedDate varchar(50) default '')
-            Dim account As String = context.Request.QueryString("account")
-            Dim name As String = context.Request.QueryString("name")
-            Dim password As String = context.Request.QueryString("password")
-            Dim newPassword As String = context.Request.QueryString("newPassword")
-            Dim corp As String = context.Request.QueryString("corp")
-
-            'Stepp = 1
-
-            account = Trim(account)
-            If account = "" Then Return New NormalResponse(False, "必须输入账号")
-            If password = "" Then Return New NormalResponse(False, "必须输入密码")
-            If newPassword = "" Then Return New NormalResponse(False, "必须输入新密码")
-            'If carrier <> "中国移动" And carrier <> "中国联通" And carrier <> "中国电信" Then Return New NormalResponse(False, "运营商错误")
-
-            Dim sql As String
-
-            sql = "update logAccount set password='" & newPassword & "' where account='" & account & "'" ' and password='" & password & "'"
-
-            Stepp = 3
+            Dim usrInfo As userInfo = GetUsrInfoByToken(token)
+            If IsNothing(usrInfo) Then Return New NormalResponse(False, "您的权限不足，不能执行此命令")
+            If usrInfo.power <> 9 Then Return New NormalResponse(False, "您的权限不足，不能执行此命令")
+            If IsNothing(data) Then Return New NormalResponse(False, "post data is null")
+            Dim str As String = JsonConvert.SerializeObject(data)
+            Dim mi As accountInfo = JsonConvert.DeserializeObject(str, GetType(accountInfo))
+            If IsNothing(mi) Then Return New NormalResponse(False, "AccountInfo is null,maybe json is error")
+            If ORALocalhost.SqlIsIn("select * from LogAccount where ACCOUNT='" & mi.account & "'") = False Then
+                Return New NormalResponse(False, "该账号不存在")
+            End If
+            Dim oldMiInfo As userInfo = GetUsrInfoByAccount(mi.account)
+            If oldMiInfo.power >= usrInfo.power Then
+                Return New NormalResponse(False, "您不能修改与您同等、高等账户")
+            End If
+            If mi.power >= usrInfo.power Then
+                Return New NormalResponse(False, "您不能修改与您同等、高等账户")
+            End If
+            Dim sql As String = "update logAccount set name='{0}' ,corp='{1}',state='{2}',power='{3}' where account='" & mi.account & "'"
+            sql = String.Format(sql, New String() {mi.name, mi.corp, mi.state, mi.power})
             Dim result As String = ORALocalhost.SqlCMD(sql)
-
             If result = "success" Then
-                Return New NormalResponse(True, "更新密码成功！")
+                Return New NormalResponse(True, result, "", "")
+            Else
+                Return New NormalResponse(False, result, "", "")
+            End If
+        Catch ex As Exception
+            Return New NormalResponse(False, "AccountModify Err:" & ex.Message & ",Step=" & Stepp)
+        End Try
+    End Function
+    Public Function Handle_DeleteAccount(context As HttpContext) As NormalResponse
+        Try
+            Dim token As String = context.Request.QueryString("token")
+            Dim account As String = context.Request.QueryString("account")
+            Dim usrInfo As userInfo = GetUsrInfoByToken(token)
+            If IsNothing(usrInfo) Then Return New NormalResponse(False, "您的权限不足，不能执行此命令")
+            If usrInfo.power <> 9 Then Return New NormalResponse(False, "您的权限不足，不能执行此命令")
+            Dim mi As userInfo = GetUsrInfoByAccount(account)
+            If IsNothing(mi) Then
+                Return New NormalResponse(False, "该账号不存在")
+            End If
+            If mi.usr = "" Then
+                Return New NormalResponse(False, "该账号不存在")
+            End If
+            If mi.power >= usrInfo.power Then
+                Return New NormalResponse(False, "您不能删除与您同等、高等的账户")
+            End If
+            Dim sql As String = "delete from logAccount where account='" & account & "'"
+            Dim result As String = ORALocalhost.SqlCMD(sql)
+            If result = "success" Then
+                Return New NormalResponse(True, result)
             Else
                 Return New NormalResponse(False, result)
             End If
-            Stepp = 4
-            ' "select province,city,district,netType,GDlon,GDlat,RSRP,time,SINR,eNodeBId,CellId from SDKTABLE"
-            'Carrier,province,city,district,netType,GDlon,GDlat,RSRP,time,SINR
-            'dt.Columns(0).ColumnName = "project"            ' dt.Columns(1).ColumnName = "carrier"
-            'dt.Columns(1).ColumnName = "workContent"
-            'dt.Columns(2).ColumnName = "issue"
-
-            'Stepp = 5
-            Return New NormalResponse(True, "", "", "")
         Catch ex As Exception
-            Return New NormalResponse(False, "AccountModify Err:" & ex.Message & ",Step=" & Stepp)
+            Return New NormalResponse(False, ex.ToString)
         End Try
     End Function
     Public Function Handle_GetIndexPageTable0(context As HttpContext) As NormalResponse '2018-12-23 09:54:00 更新 增加首页拼接表
@@ -871,4 +1057,55 @@ Public Class HTTPHandle
         Dim weekInt As Integer = Convert.ToInt32(d.DayOfWeek)
         Return d.AddDays(-1 * weekInt - 1)
     End Function
+    '修改账户密码
+    Public Function Handle_ModifyPassword(ByVal context As HttpContext) As NormalResponse
+        Dim sql As String
+        Try
+            ' Dim account As String = context.Request.QueryString("account")
+            Dim password As String = context.Request.QueryString("password")
+            Dim newPassword As String = context.Request.QueryString("newPassword")
+            Dim token As String = context.Request.QueryString("token")
+            Dim account As String = GetUsrByToken(token)
+
+            If account = "" Then Return New NormalResponse(False, "必须输入账号") '使用账户名修改
+            If password = "" Then Return New NormalResponse(False, "必须输入密码")
+            If newPassword = "" Then Return New NormalResponse(False, "必须输入新密码")
+            Dim unUsePwd() As String = New String() {"'", "-"}
+            For Each itm In unUsePwd
+                If password.Contains(itm) Then
+                    Return New NormalResponse(False, "旧密码不能包含 ' - 等特殊字符")
+                End If
+                If newPassword.Contains(itm) Then
+                    Return New NormalResponse(False, "新密码不能包含 ' - 等特殊字符")
+                End If
+            Next
+            sql = "select * from logAccount where account='" & account & "' and password='" & password & "'"
+            Dim bool As Boolean = ORALocalhost.SqlIsIn(sql)
+            If Not bool Then
+                Return New NormalResponse(False, "账户不存在或旧密码错误")
+            End If
+            token = GetNewToken(account, True)
+            sql = "update logAccount set password='" & newPassword & "' where account='" & account & "'" ' and password='" & password & "'"
+            Dim result As String = ORALocalhost.SqlCMD(sql)
+            If result = "success" Then
+                Return New NormalResponse(True, "更新密码成功！", "", token)
+            Else
+                Return New NormalResponse(False, result)
+            End If
+
+        Catch ex As Exception
+            Return New NormalResponse(False, "AccountPassWordModify Err:" & ex.Message)
+        End Try
+    End Function
+
+    Public Function Handle_GetAllUsers(context As HttpContext) As NormalResponse
+        Try
+            Dim sql As String = "select account,name ,power from logAccount where state=1"
+            Dim dt As DataTable = ORALocalhost.SqlGetDT(sql)
+            Return New NormalResponse(dt)
+        Catch ex As Exception
+            Return New NormalResponse(False, ex.ToString)
+        End Try
+    End Function
+
 End Class

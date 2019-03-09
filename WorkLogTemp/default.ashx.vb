@@ -67,7 +67,7 @@ Public Class _default1
                     Return
                 End If
             Catch ex As Exception
-                myResponse(context, New NormalResponse(False, "WorkLogTemp_您的请求GET func出现了错误", "", ex.Message))
+                myResponse(context, New NormalResponse(False, "WorkLogTemp_您的请求GET func出现了错误", "", ex.ToString()))
                 Return
             End Try
             myResponse(context, New NormalResponse(False, "WorkLogTemp_您的请求GET func不在受理范围内", "", context.Request.Url.PathAndQuery))

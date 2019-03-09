@@ -12,8 +12,9 @@ Imports Oracle.ManagedDataAccess.Client
 Imports Newtonsoft
 Imports Newtonsoft.Json
 Imports Newtonsoft.Json.Linq
+
 Public Class OracleHelper
-    Dim NKConnectString As String = "Data Source=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=111.53.74.132)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=oss)));Persist Security Info=True;User ID=work;Password=Smart9080;"
+    Dim NKConnectString As String = "Data Source=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=111.53.74.132)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=oss)));Persist Security Info=True;User ID=npo;Password=Smart9080;"
     Sub New(ip As String, port As Integer, seviceName As String, usr As String, pwd As String)
         NKConnectString = "Data Source=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST={0})(PORT={1}))(CONNECT_DATA=(SERVICE_NAME={2})));Persist Security Info=True;User ID={3};Password={4};"
         NKConnectString = String.Format(NKConnectString, New String() {ip, port, seviceName, usr, pwd})
@@ -26,8 +27,8 @@ Public Class OracleHelper
     End Function
     Private Function SubSqlCMDListQuickByPara(databaseName As String, ByVal dt As DataTable) As String
         If IsNothing(dt) Then Return "dt=null"
+        Dim conn As New OracleConnection(NKConnectString)
         Try
-            Dim conn As New OracleConnection(NKConnectString)
             conn.Open()
             Dim sql As String = "insert into " & databaseName & " ({0}) values ({1})"
             Dim measTypes As String = ""
@@ -80,6 +81,7 @@ Public Class OracleHelper
         Catch ex As Exception
             ' MsgBox(ex.ToString)
             'File.WriteAllText("d:\oraerr.txt", ex.ToString)
+            conn.Close()
             Return ex.ToString
         End Try
     End Function
@@ -96,8 +98,11 @@ Public Class OracleHelper
         End Try
     End Function
     Public Function SQLInfo(ByVal CmdString As String) As String
+
+
+        Dim SQL As New OracleConnection(NKConnectString)
         Try
-            Dim SQL As New OracleConnection(NKConnectString)
+
             SQL.Open()
             Dim SQLCommand As OracleCommand = New OracleCommand(CmdString, SQL)
             Dim obj As Object = SQLCommand.ExecuteScalar
@@ -110,12 +115,14 @@ Public Class OracleHelper
             SQL.Close()
             Return str
         Catch ex As Exception
+            SQL.Close()
             Return ex.Message
         End Try
     End Function
     Public Function SqlCMD(ByVal sql As String) As String
+        Dim conn As New OracleConnection(NKConnectString)
         Try
-            Dim conn As New OracleConnection(NKConnectString)
+
             conn.Open()
             Dim cmd As New OracleCommand(sql, conn)
             cmd.CommandTimeout = 99999999
@@ -123,13 +130,17 @@ Public Class OracleHelper
             conn.Close()
             Return "success"
         Catch ex As Exception
+            ' File.WriteAllText("d:\oraerrCmd.txt", ex.ToString & vbCrLf & sql)
+            conn.Close()
+
             Return ex.Message
         End Try
     End Function
     Public Function SqlCMDList(ByVal sqlList As List(Of String)) As String
         If IsNothing(sqlList) Then Return "sqlList=null"
+        Dim conn As New OracleConnection(NKConnectString)
         Try
-            Dim conn As New OracleConnection(NKConnectString)
+
             conn.Open()
             Dim str As String = ""
             For Each sq In sqlList
@@ -142,14 +153,15 @@ Public Class OracleHelper
             conn.Close()
             Return "success"
         Catch ex As Exception
+            conn.Close()
             Return ex.ToString
         End Try
     End Function
 
     Public Function SqlGetDT(ByVal sql As String) As DataTable
         Dim dt As New DataTable
+        Dim conn As New OracleConnection(NKConnectString)
         Try
-            Dim conn As New OracleConnection(NKConnectString)
             conn.Open()
             Dim cmd As New OracleCommand(sql, conn)
             cmd.CommandTimeout = 99999999
@@ -158,7 +170,8 @@ Public Class OracleHelper
             conn.Close()
             Return dt
         Catch ex As Exception
-
+            '   File.WriteAllText("d:\oraerrGet.txt", ex.ToString & vbCrLf & sql)
+            conn.Close()
             Return dt
         End Try
     End Function

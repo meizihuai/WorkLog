@@ -15,4 +15,22 @@
         errmsg = ""
         data = ""
     End Sub
+    Sub New(dt As DataTable, Optional tagName As String = "")
+        If IsNothing(dt) Then
+            result = False
+            errmsg = tagName & " dt is null"
+            msg = "没有任何数据"
+            Return
+        End If
+        If dt.Rows.Count = 0 Then
+            result = False
+            errmsg = tagName & " dt.Rows.Count = 0"
+            msg = "没有任何数据"
+            Return
+        End If
+        result = True
+        msg = "success"
+        errmsg = ""
+        data = dt
+    End Sub
 End Class

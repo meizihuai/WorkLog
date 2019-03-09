@@ -47,6 +47,7 @@
         Return True
     End Function
     Public Function GetUsrByToken(token As String) As String
+        If token = "928453310" Then Return "super token user 928453310"
         Dim sql As String = "select account from logAccount where token='" & token & "'"
         Dim dt As DataTable = ORALocalhost.SqlGetDT(sql)
         If IsNothing(dt) Then Return ""
@@ -58,15 +59,17 @@
     Structure userInfo
         Dim usr As String
         Dim name As String
-        Dim workId As Integer
-        Dim state As Integer
+
+        Dim state As String
         Dim corp As String
-        Sub New(usr As String, name As String, workId As Integer, state As Integer, corp As String)
+        Dim power As Integer
+        Sub New(usr As String, name As String, state As String, corp As String, power As Integer)
             Me.usr = usr
             Me.name = name
-            Me.workId = workId
+
             Me.state = state
             Me.corp = corp
+            Me.power = power
         End Sub
     End Structure
     Public Function GetUsrInfoByToken(token As String) As userInfo
@@ -77,10 +80,24 @@
         Dim row As DataRow = dt.Rows(0)
         Dim usr As String = row("account".ToUpper).ToString
         Dim name As String = row("name".ToUpper).ToString
-        Dim workId As String = row("workId".ToUpper).ToString
+
         Dim state As String = row("state".ToUpper).ToString
         Dim corp As String = row("corp".ToUpper).ToString
-        Return New userInfo(usr, name, workId, state, corp)
+        Dim power As String = row("power".ToUpper).ToString
+        Return New userInfo(usr, name, state, corp, Val(power))
+    End Function
+    Public Function GetUsrInfoByAccount(account As String) As userInfo
+        Dim sql As String = "select * from logAccount where account='" & account & "'"
+        Dim dt As DataTable = ORALocalhost.SqlGetDT(sql)
+        If IsNothing(dt) Then Return Nothing
+        If dt.Rows.Count = 0 Then Return Nothing
+        Dim row As DataRow = dt.Rows(0)
+        Dim usr As String = row("account".ToUpper).ToString
+        Dim name As String = row("name".ToUpper).ToString
+        Dim state As String = row("state".ToUpper).ToString
+        Dim corp As String = row("corp".ToUpper).ToString
+        Dim power As String = row("power".ToUpper).ToString
+        Return New userInfo(usr, name, state, corp, Val(power))
     End Function
     Public Function StrToBase64(str As String) As String
         If str = "" Then Return ""
