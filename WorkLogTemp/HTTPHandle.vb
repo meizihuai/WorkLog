@@ -28,11 +28,17 @@ Public Class HTTPHandle
         Dim name As String
         Dim token As String
         Dim power As Integer
-        Sub New(usr As String, name As String, token As String, power As Integer)
+        Dim corp As String
+        Dim state As String
+        Dim projects As List(Of String)
+        Sub New(usr As String, name As String, token As String, power As Integer, corp As String, state As String)
             Me.usr = usr
             Me.name = name
             Me.token = token
             Me.power = power
+            Me.corp = corp
+            Me.state = state
+            Me.projects = New List(Of String)
         End Sub
     End Structure
     Structure workLogInfo
@@ -107,7 +113,7 @@ Public Class HTTPHandle
             Dim passWord As String = context.Request.QueryString("pwd")
             If account = "" Then Return New NormalResponse(False, "用户名为空")
             If passWord = "" Then Return New NormalResponse(False, "密码为空")
-            Dim sql As String = "select password,token,name,power from LogAccount where account='" & account & "' and state<>0" ' And " passWord ='" & passWord & "'"
+            Dim sql As String = "select password,token,name,power,corp,state from LogAccount where account='" & account & "' and state<>0" ' And " passWord ='" & passWord & "'"
             Dim dt As DataTable = ORALocalhost.SqlGetDT(sql)
             If IsNothing(dt) Then Return New NormalResponse(False, "用户名或密码错误")
             If dt.Rows.Count = 0 Then Return New NormalResponse(False, "用户名或密码错误")
@@ -116,16 +122,111 @@ Public Class HTTPHandle
             Dim OraToken As String = row("token".ToUpper).ToString
             Dim oraName As String = row("name".ToUpper).ToString
             Dim power As String = row("power".ToUpper).ToString
+            Dim corp As String = row("corp".ToUpper).ToString
+            Dim state As String = row("state".ToUpper).ToString
             If IsDBNull(OraToken) Then OraToken = ""
             If OraPwd = passWord Then
                 If OraToken = "" Then
                     OraToken = GetNewToken(account, True)
                 End If
-                Dim linfo As New loginInfo(account, oraName, OraToken, power)
+                Dim linfo As New loginInfo(account, oraName, OraToken, power, corp, state)
+                linfo.projects = GetUsrProjects(linfo.usr)
                 Return New NormalResponse(True, "success", "", linfo)
             Else
                 Return New NormalResponse(False, "用户名或密码错误", "", "")
             End If
+        Catch ex As Exception
+            Return New NormalResponse(False, ex.ToString)
+        End Try
+    End Function
+    '获取用户信息
+    Public Function Handle_GetUsrInfo(ByVal context As HttpContext) As NormalResponse
+        Try
+            Dim token As String = context.Request.QueryString("token")
+            Dim account As String = GetUsrByToken(token)
+            Dim sql As String = "select password,token,name,power,corp,state from LogAccount where account='" & account & "' " ' And " passWord ='" & passWord & "'"
+            Dim dt As DataTable = ORALocalhost.SqlGetDT(sql)
+            If IsNothing(dt) Then Return New NormalResponse(False, "没有该用户信息")
+            If dt.Rows.Count = 0 Then Return New NormalResponse(False, "没有该用户信息")
+            Dim row As DataRow = dt.Rows(0)
+            Dim OraPwd As String = row("password".ToUpper).ToString
+            Dim OraToken As String = row("token".ToUpper).ToString
+            Dim oraName As String = row("name".ToUpper).ToString
+            Dim power As String = row("power".ToUpper).ToString
+            Dim corp As String = row("corp".ToUpper).ToString
+            Dim state As String = row("state".ToUpper).ToString
+            Dim linfo As New loginInfo(account, oraName, OraToken, power, corp, state)
+            linfo.projects = GetUsrProjects(linfo.usr)
+            Return New NormalResponse(True, "success", "", linfo)
+        Catch ex As Exception
+            Return New NormalResponse(False, ex.ToString)
+        End Try
+    End Function
+    '获取用户所属所有项目
+    Private Function GetUsrProjects(usr As String) As List(Of String)
+        Dim sql As String = "select * from logProject"
+        Dim dt As DataTable = ORALocalhost.SqlGetDT(sql)
+        If IsNothing(dt) Then
+            Return Nothing
+        End If
+        If dt.Rows.Count = 0 Then
+            Return Nothing
+        End If
+        Dim list As New List(Of String)
+        For Each row As DataRow In dt.Rows
+            Dim projectName As String = row("Project".ToUpper).ToString
+            Dim corp As String = row("corp".ToUpper).ToString
+            Dim state As String = row("state".ToUpper).ToString
+            Dim accounts As String = row("accounts".ToUpper).ToString
+            Dim creater As String = row("creater".ToUpper).ToString
+            If IsNothing(accounts) = False Then
+                If IsDBNull(accounts) = False Then
+                    If accounts <> "" Then
+                        Try
+                            Dim usrs() As String = JsonConvert.DeserializeObject(Of String())(accounts)
+                            If IsNothing(usrs) = False Then
+                                If usrs.Contains(usr) Then
+                                    list.Add(projectName)
+                                End If
+                            End If
+                        Catch ex As Exception
+
+                        End Try
+                    End If
+                End If
+            End If
+        Next
+        Return list
+    End Function
+    '获取用户某日期没有写的项目
+    Public Function Handle_GetUsrUnAddProject(context As HttpContext) As NormalResponse
+        Try
+            Dim account As String = GetUsrByToken(context.Request.QueryString("token").ToString)
+            Dim day As String = context.Request.QueryString("day")
+            Try
+                Dim time As Date = Date.Parse(day)
+                If IsNothing(time) Then
+                    Return New NormalResponse(False, "时间格式非法，请用yyyy-MM-dd")
+                End If
+                day = time.ToString("yyyy-MM-dd")
+            Catch ex As Exception
+                Return New NormalResponse(False, "时间格式非法，请用yyyy-MM-dd")
+            End Try
+            Dim sql As String = "select project from worklog where day='" & day & "' and account='" & account & "'"
+            Dim dt As DataTable = ORALocalhost.SqlGetDT(sql)
+            Dim list As List(Of String) = GetUsrProjects(account)
+            If IsNothing(list) Then
+                Return New NormalResponse(False, "该用户没有任何项目")
+            End If
+            If IsNothing(dt) = False Then
+                For Each row As DataRow In dt.Rows
+                    Dim txt As String = row("project").ToString
+                    If list.Contains(txt) Then
+                        list.Remove(txt)
+                    End If
+                Next
+            End If
+            Return New NormalResponse(True, "", "", list)
         Catch ex As Exception
             Return New NormalResponse(False, ex.ToString)
         End Try
@@ -675,11 +776,11 @@ Public Class HTTPHandle
             Return "没有该项目"
         End If
         For Each row As DataRow In dt.Rows
-            Dim projectName As String = row("Project".ToUpper)
-            Dim corp As String = row("corp".ToUpper)
-            Dim state As String = row("state".ToUpper)
-            Dim accounts As String = row("accounts".ToUpper)
-            Dim creater As String = row("creater".ToUpper)
+            Dim projectName As String = row("Project".ToUpper).ToString
+            Dim corp As String = row("corp".ToUpper).ToString
+            Dim state As String = row("state".ToUpper).ToString
+            Dim accounts As String = row("accounts".ToUpper).ToString
+            Dim creater As String = row("creater".ToUpper).ToString
             If projectName = project Then
                 If state <> "1" Then
                     Return "该项目已关闭，无法新增该项目日志"
@@ -1097,10 +1198,10 @@ Public Class HTTPHandle
             Return New NormalResponse(False, "AccountPassWordModify Err:" & ex.Message)
         End Try
     End Function
-
+    '获取所有账户
     Public Function Handle_GetAllUsers(context As HttpContext) As NormalResponse
         Try
-            Dim sql As String = "select account,name ,power from logAccount where state=1"
+            Dim sql As String = "select account,name ,power,corp,state from logAccount"
             Dim dt As DataTable = ORALocalhost.SqlGetDT(sql)
             Return New NormalResponse(dt)
         Catch ex As Exception

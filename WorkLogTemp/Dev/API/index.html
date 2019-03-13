@@ -15,15 +15,38 @@
            // GetAllUsers();
            // AddProject();
            // GetProject();
-            DeleteProject();
+           // DeleteProject();
            // UpdateProject();
            // AddAccount();
            // UpdateAccount();
           //  DeleteAccount();
+          //  GetUsrUnAddProject();
+            GetUsrInfo();
         }
         function log(str) {
             console.log(str);
             $("#main").html(str);
+        }
+        //获取用户某日期没有写的项目
+        function GetUsrUnAddProject() {
+            var d = {
+                func: "GetUsrUnAddProject",
+                day:"2019-03-12",
+                token: "YWRtaW4jMjAxOS0wMS0yMSAxMTo1MzoyNA=="
+            }
+            $.get(u, d, function (data) {
+                log(data);
+            }, "text");
+        }
+        //根据token获取用户信息
+        function GetUsrInfo() {
+            var d = {
+                func: "GetUsrInfo",
+                token: "YWRtaW4jMjAxOS0wMS0yMSAxMTo1MzoyNA=="
+            }
+            $.get(u, d, function (data) {
+                log(data);
+            }, "text");
         }
         function login() {
             var d = {
