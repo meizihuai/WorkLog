@@ -70,13 +70,14 @@ Public Class HTTPHandle
 
     Structure accountInfo
 
-
         Dim account As String
         Dim password As String
         Dim name As String
         Dim corp As String
         Dim state As String '是否正常
         Dim power As Integer
+        Dim projects As String()
+
     End Structure
     Structure logProjectInfo
         Dim project As String
@@ -583,36 +584,32 @@ Public Class HTTPHandle
             Dim usrInfo As userInfo = GetUsrInfoByToken(token)
             If IsNothing(usrInfo) Then Return New NormalResponse(False, "token无效")
             name = Trim(name) : day = Trim(day)
-            name = usrInfo.name
+            '  name = usrInfo.name
+            If usrInfo.power < 9 Then
+                name = usrInfo.name
+            End If
             If name = "" Then Return New NormalResponse(False, "必须输入名字")
             If day = "" Then Return New NormalResponse(False, "必须输入日期")
             If project = "" Then Return New NormalResponse(False, "必须输入项目名")
             If CheckUsrAndProject(usrInfo.usr, project) <> "success" Then
-                Return New NormalResponse(False, "您无法更新此项目日志")
+                If usrInfo.power < 9 Then
+                    Return New NormalResponse(False, "您无法更新此项目日志")
+                End If
             End If
-            Dim Cond As String = "", sql As String
+            Dim dik As New Dictionary(Of String, Object)
 
-            If corp <> "" Then Cond = " corp='" & corp & "'"
-            If workContent <> "" Then Cond = IIf(Cond.Length = 0, "", Cond & " , ") & " workContent ='" & workContent & "'"
-            If issue <> "" Then Cond = IIf(Cond.Length = 0, "", Cond & " , ") & " issue ='" & issue & "'"
-            If project <> "" Then Cond = IIf(Cond.Length = 0, "", Cond & " , ") & " project ='" & project & "'"
-            If city <> "" Then Cond = IIf(Cond.Length = 0, "", Cond & " , ") & " city ='" & city & "'"
+            If corp <> "" Then dik.Add("corp", corp)
+            If workContent <> "" Then dik.Add("workContent", workContent)
+            If issue <> "" Then dik.Add("issue", issue)
+            If project <> "" Then dik.Add("project", project)
+            If city <> "" Then dik.Add("city", city)
 
-            If Cond.Length = 0 Then
+            If dik.Keys.Count = 0 Then
                 Return New NormalResponse(False, "WorkLog没有任何更新", name, "")
             End If
-            Cond = IIf(Cond.Length = 0, "", Cond & " , ") & " modifiedBy ='" & usrInfo.name & "'"
-            Cond = IIf(Cond.Length = 0, "", Cond & " , ") & " modifiedDate ='" & Now.ToString("yyyy-MM-dd HH:mm:ss") & "'"
-            sql = "update Worklog set " & Cond & " where name='" & name & "' and day='" & day & "' and project='" & project & "'"
-
-            Dim result As String = ORALocalhost.SqlCMD(sql)
-
-            If result = "success" Then
-                Return New NormalResponse(True, "更新 " & Cond & " 成功！")
-            Else
-                Return New NormalResponse(False, result)
-            End If
-
+            dik.Add("modifiedBy", usrInfo.name)
+            dik.Add("modifiedDate", Now.ToString("yyyy-MM-dd HH:mm:ss"))
+            Return ORALocalhost.UpdateByDik("Worklog", dik, 0, "name ='" & name & "' and day='" & day & "' and project='" & project & "'")
         Catch ex As Exception
             Return New NormalResponse(False, "UpdateWorkLog Err:" & ex.Message & ",Step=" & Stepp)
         End Try
@@ -883,6 +880,7 @@ Public Class HTTPHandle
 
     '增加用户账号
     Public Function Handle_AddAccount(ByVal context As HttpContext, data As Object, token As String) As NormalResponse
+        Dim stepp As Integer = 0
         Try
             Dim usrInfo As userInfo = GetUsrInfoByToken(token)
             If IsNothing(usrInfo) Then Return New NormalResponse(False, "您的权限不足，不能执行此命令")
@@ -897,17 +895,48 @@ Public Class HTTPHandle
             If mi.power >= usrInfo.power Then
                 Return New NormalResponse(False, "您不能创建与您同等、高等账户")
             End If
+            Dim projects As String() = mi.projects
+            stepp = 1
+            If IsNothing(projects) = False Then
+                projects = projects.ToList().Distinct().ToArray()
+                stepp = 2
+                For Each p In projects
+                    If Not ORALocalhost.SqlIsIn($"select project from logProject where project='{p}'") Then
+                        Return New NormalResponse(False, $"项目{p}不存在！")
+                    End If
+                Next
+            End If
             Dim sql As String = "insert into LogAccount (ACCOUNT,PASSWORD,NAME,CORP,STATE,power) values ('{0}','{1}','{2}','{3}','{4}','{5}')"
             sql = String.Format(sql, New String() {mi.account, mi.password, mi.name, mi.corp, mi.state, mi.power})
             Dim result As String = ORALocalhost.SqlCMD(sql)
             If result = "success" Then
+                If IsNothing(projects) = False Then
+                    For Each p In projects
+                        ProjectAddAccount(p, mi.account)
+                    Next
+                End If
                 Return New NormalResponse(True, result)
             Else
                 Return New NormalResponse(False, result, "", sql)
             End If
         Catch ex As Exception
-            Return New NormalResponse(False, ex.ToString)
+            Return New NormalResponse(False, ex.ToString, "", "stepp=" & stepp)
         End Try
+    End Function
+    Private Function ProjectAddAccount(project As String, account As String) As Boolean
+        Dim sql As String = $"select accounts from logproject where project='{project}'"
+        Dim dt As DataTable = ORALocalhost.SqlGetDT(sql)
+        If IsNothing(dt) OrElse dt.Rows.Count = 0 Then Return False
+        Dim accounts As String = dt.Rows(0)("accounts").ToString()
+        Dim list As New List(Of String)
+        If IsNothing(accounts) = False AndAlso IsDBNull(accounts) = False Then list = JsonConvert.DeserializeObject(Of List(Of String))(accounts)
+        If IsNothing(list) Then Return False
+        If list.Contains(account) Then Return True
+        list.Add(account)
+        accounts = JsonConvert.SerializeObject(list)
+        sql = $"update logproject set accounts='{accounts}' where project='{project}'"
+        ORALocalhost.SqlCMD(sql)
+        Return True
     End Function
     '修改账户
     Public Function Handle_UpdateAccount(ByVal context As HttpContext, data As Object, token As String) As NormalResponse
@@ -1119,18 +1148,23 @@ Public Class HTTPHandle
         For i = 0 To 6
             sheet.Cells(i + 5, 2).Value = weekStart.AddDays(i).ToString("MM月dd日")
             Dim writeDay As String = weekStart.AddDays(i).ToString("yyyy-MM-dd")
+            Dim projectSb As New StringBuilder
+            Dim contentSb As New StringBuilder
+            Dim city As String = ""
             For Each row As DataRow In dt.Rows
                 Dim thisDay As String = row("DAY")
                 If thisDay = writeDay Then
                     Dim project As String = row("project".ToUpper).ToString
                     Dim workContent As String = row("workContent".ToUpper).ToString
-                    Dim city As String = row("city".ToUpper).ToString
-                    sheet.Cells(i + 5, 3).Value = city
-                    sheet.Cells(i + 5, 4).Value = project
-                    sheet.Cells(i + 5, 6).Value = workContent
-                    Exit For
+                    If (row("city".ToUpper).ToString <> "") Then city = row("city".ToUpper).ToString
+                    projectSb.AppendLine(project)
+                    contentSb.AppendLine("['" & project & "'工作内容]")
+                    contentSb.AppendLine(workContent)
                 End If
             Next
+            sheet.Cells(i + 5, 3).Value = city
+            sheet.Cells(i + 5, 4).Value = projectSb.ToString()
+            sheet.Cells(i + 5, 6).Value = contentSb.ToString()
         Next
         sheet.Cells(12, 2).Value = thisWeekWork
         sheet.Cells(13, 2).Value = problem

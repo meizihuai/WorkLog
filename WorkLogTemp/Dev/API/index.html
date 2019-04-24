@@ -17,11 +17,11 @@
            // GetProject();
            // DeleteProject();
            // UpdateProject();
-           // AddAccount();
+            AddAccount();
            // UpdateAccount();
           //  DeleteAccount();
           //  GetUsrUnAddProject();
-            GetUsrInfo();
+            //GetUsrInfo();
         }
         function log(str) {
             console.log(str);
@@ -133,9 +133,10 @@
                 name: "test2",
                 corp: "致讯",
                 state: "0", //账号状态  1正常，0异常，异常则不允许登陆   前端应默认 1
-                power: "1"  /* 账号权限  1普通用户，9管理员 
+                power: "1",  /* 账号权限  1普通用户，9管理员 
                                前端应默认1并隐藏或置灰表单中权限字段(为了以后权限级别增多了做准备) 
                                暂时后台只允许创建比自己权限低的账户 */
+                projects: ["APP","UPLAN"]
             }
             var ps = {
                 func: "AddAccount",
